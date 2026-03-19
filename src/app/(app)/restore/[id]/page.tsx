@@ -119,7 +119,7 @@ export default function RestorePage() {
             className="text-xl font-bold"
             style={{ fontFamily: "var(--font-fraunces), Georgia, serif", color: "#1C1410" }}
           >
-            Photo Restore
+            PicRenew
           </a>
         </div>
       </header>

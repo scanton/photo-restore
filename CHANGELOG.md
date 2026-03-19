@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Photo Restore will be documented in this file.
+All notable changes to PicRenew will be documented in this file.
 
 ## [0.1.0.0] - 2026-03-18
 

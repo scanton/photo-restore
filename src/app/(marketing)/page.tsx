@@ -49,7 +49,7 @@ export default function LandingPage() {
             className="text-xl font-bold"
             style={{ fontFamily: "var(--font-fraunces), Georgia, serif", color: "#1C1410" }}
           >
-            Photo Restore
+            PicRenew
           </span>
           <nav className="flex items-center gap-6">
             <a
@@ -328,10 +328,10 @@ export default function LandingPage() {
             className="text-sm"
             style={{ fontFamily: "var(--font-fraunces), Georgia, serif", color: "#8A7A6E" }}
           >
-            Photo Restore
+            PicRenew
           </span>
           <p className="text-xs" style={{ color: "#A89380" }}>
-            © {new Date().getFullYear()} Photo Restore. All rights reserved.
+            © {new Date().getFullYear()} PicRenew. All rights reserved.
           </p>
         </div>
       </footer>

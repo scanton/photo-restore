@@ -1,4 +1,4 @@
-# Photo Restore
+# PicRenew
 
 AI-powered photo restoration for family memories. Upload an old, faded, or damaged photograph — get back a beautifully restored version in seconds.
 

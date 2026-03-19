@@ -26,7 +26,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Photo Restore",
+  title: "PicRenew",
   description: "AI-powered photo restoration",
 };
 

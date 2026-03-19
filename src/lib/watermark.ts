@@ -3,7 +3,7 @@ import { SANS_32_WHITE } from "jimp/fonts";
 import { BlendMode } from "@jimp/core";
 
 /**
- * Burns a semi-transparent "PREVIEW — Photo Restore" watermark diagonally
+ * Burns a semi-transparent "PREVIEW — PicRenew" watermark diagonally
  * across the center of the image.
  *
  * Returns a JPEG buffer.
@@ -17,7 +17,7 @@ export async function burnWatermark(inputBuffer: Buffer): Promise<Buffer> {
   // Load a white bitmap font
   const font = await loadFont(SANS_32_WHITE);
 
-  const text = "PREVIEW — Photo Restore";
+  const text = "PREVIEW — PicRenew";
 
   // Measure text so we can center it
   const textWidth = measureText(font, text);
