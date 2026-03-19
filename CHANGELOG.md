@@ -11,3 +11,4 @@ All notable changes to Photo Restore will be documented in this file.
 - Post-launch roadmap (`TODOS.md`) — five deferred items: physical print ordering, genealogy integrations, referral program, developer API, family album
 - Vendored gstack skills (`/browse`, `/plan-ceo-review`, `/plan-eng-review`, `/design-consultation`, `/review`, `/ship`, `/qa`, `/qa-only`, `/design-review`, `/office-hours`, `/retro`, `/debug`, `/document-release`)
 - `.gitignore` — Node/Next.js, Vercel, gstack binaries, OS artifacts
+- `README.md` — product overview, tech stack, architecture decisions, design system summary, dev setup, gstack skills index
