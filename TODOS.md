@@ -59,3 +59,9 @@
 **Effort:** L (human: ~2 weeks / CC: ~1.5 hours)
 **Priority:** P3
 **Depends on:** Stable user accounts; image storage system proven at scale
+
+---
+
+## Completed
+
+_No items completed yet — implementation not started._
