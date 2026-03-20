@@ -29,6 +29,7 @@ All notable changes to PicRenew will be documented in this file.
 - Webhook auth uses `crypto.timingSafeEqual` to prevent timing attacks on the shared secret comparison.
 - Webhook hires phase: idempotency check (`status === 'complete'`) now runs before image download, not after.
 - Email module: `Resend` is instantiated inside the function body (not at module level) to prevent throws in test environments missing `RESEND_API_KEY`.
+- Upload route: `VALID_PRESET_SLUGS` typed as `Set<string>` to fix TypeScript build error caused by `as const` narrowing the Set's type to the literal union.
 
 ## [0.3.1.0] - 2026-03-19
 
