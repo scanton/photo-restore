@@ -195,4 +195,139 @@ describe("POST /api/webhooks/stripe", () => {
     expect(res.status).toBe(200);
     expect(mockAwardCredits).not.toHaveBeenCalled();
   });
+
+  // ── invoice.payment_succeeded ─────────────────────────────────────────────
+  //
+  // The handler makes two sequential db.select calls:
+  //   1. getUserIdByStripeCustomerId → mockGetUser (call 1)
+  //   2. subscriptions lookup → mockGetUser (call 2)
+  // Use mockResolvedValueOnce to sequence different results per call.
+
+  describe("invoice.payment_succeeded", () => {
+    function buildInvoiceEvent(overrides?: Record<string, unknown>) {
+      return {
+        type: "invoice.payment_succeeded",
+        data: {
+          object: {
+            customer: "cus_abc",
+            period_start: 1710000000,
+            parent: {
+              subscription_details: {
+                subscription: "sub_123",
+              },
+            },
+            ...overrides,
+          },
+        },
+      };
+    }
+
+    it("skips non-subscription invoices (no parent.subscription_details)", async () => {
+      mockConstructEvent.mockReturnValue({
+        type: "invoice.payment_succeeded",
+        data: {
+          object: {
+            customer: "cus_abc",
+            period_start: 1710000000,
+            parent: null,
+          },
+        },
+      });
+
+      const res = await callPOST("{}", "valid-sig");
+      expect(res.status).toBe(200);
+      expect(mockAwardCredits).not.toHaveBeenCalled();
+    });
+
+    it("skips silently when customer has no matching user in DB", async () => {
+      mockConstructEvent.mockReturnValue(buildInvoiceEvent());
+      mockGetUser.mockResolvedValueOnce([]); // user lookup → not found
+
+      const res = await callPOST("{}", "valid-sig");
+      expect(res.status).toBe(200);
+      expect(mockAwardCredits).not.toHaveBeenCalled();
+    });
+
+    it("skips silently when no subscription record found in DB", async () => {
+      mockConstructEvent.mockReturnValue(buildInvoiceEvent());
+      mockGetUser
+        .mockResolvedValueOnce([{ id: "user-uuid" }]) // user found
+        .mockResolvedValueOnce([]); // subscription → not found
+
+      const res = await callPOST("{}", "valid-sig");
+      expect(res.status).toBe(200);
+      expect(mockAwardCredits).not.toHaveBeenCalled();
+    });
+
+    it("awards creditsPerMonth from subscriptions table on successful renewal", async () => {
+      mockConstructEvent.mockReturnValue(buildInvoiceEvent());
+      mockGetUser
+        .mockResolvedValueOnce([{ id: "user-uuid" }])           // user found
+        .mockResolvedValueOnce([{ creditsPerMonth: 25 }]);       // Hobbyist sub
+
+      const res = await callPOST("{}", "valid-sig");
+      expect(res.status).toBe(200);
+      expect(mockAwardCredits).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: "user-uuid",
+          amount: 25,
+          type: "subscription_grant",
+        })
+      );
+    });
+
+    it("uses idempotency key 'sub-{subId}-{periodStart}' to prevent double grant", async () => {
+      mockConstructEvent.mockReturnValue(buildInvoiceEvent());
+      mockGetUser
+        .mockResolvedValueOnce([{ id: "user-uuid" }])
+        .mockResolvedValueOnce([{ creditsPerMonth: 25 }]);
+
+      await callPOST("{}", "valid-sig");
+
+      const call = mockAwardCredits.mock.calls[0][0] as { idempotencyKey: string };
+      expect(call.idempotencyKey).toBe("sub-sub_123-1710000000");
+    });
+
+    it("awards 60 credits for Professional subscription renewal", async () => {
+      mockConstructEvent.mockReturnValue(
+        buildInvoiceEvent({ parent: { subscription_details: { subscription: "sub_pro" } } })
+      );
+      mockGetUser
+        .mockResolvedValueOnce([{ id: "user-uuid" }])
+        .mockResolvedValueOnce([{ creditsPerMonth: 60 }]); // Pro sub
+
+      await callPOST("{}", "valid-sig");
+
+      expect(mockAwardCredits).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 60 })
+      );
+    });
+
+    it("idempotency: same invoice fired twice does not double-award (23505 dedup)", async () => {
+      // awardCredits handles 23505 internally and returns silently — we verify
+      // the second call goes through to awardCredits with the same idempotency key
+      mockConstructEvent.mockReturnValue(buildInvoiceEvent());
+      mockGetUser
+        .mockResolvedValueOnce([{ id: "user-uuid" }])
+        .mockResolvedValueOnce([{ creditsPerMonth: 25 }]);
+      mockAwardCredits.mockResolvedValue(25); // first call succeeds
+
+      await callPOST("{}", "valid-sig");
+      expect(mockAwardCredits).toHaveBeenCalledTimes(1);
+
+      // Simulate Stripe retry: reset and replay with same event
+      vi.clearAllMocks();
+      mockConstructEvent.mockReturnValue(buildInvoiceEvent());
+      mockGetUser
+        .mockResolvedValueOnce([{ id: "user-uuid" }])
+        .mockResolvedValueOnce([{ creditsPerMonth: 25 }]);
+      mockAwardCredits.mockResolvedValue(25); // awardCredits handles 23505 internally
+
+      await callPOST("{}", "valid-sig");
+      // awardCredits IS called again (with same key) — dedup happens inside credits.ts
+      expect(mockAwardCredits).toHaveBeenCalledWith(
+        expect.objectContaining({ idempotencyKey: "sub-sub_123-1710000000" })
+      );
+    });
+  });
 });

@@ -45,6 +45,12 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice;
+        await handleInvoicePaymentSucceeded(invoice);
+        break;
+      }
+
       default:
         // Unhandled event type — return 200 to acknowledge
         break;
@@ -158,6 +164,59 @@ async function handleSubscriptionUpsert(stripeSubscription: Stripe.Subscription)
       currentPeriodEnd: periodEnd,
     });
   }
+}
+
+/**
+ * Awards monthly subscription credits on every successful renewal.
+ *
+ * Idempotency key: `sub-{subscriptionId}-{periodStart}` prevents double-grant
+ * on Stripe retries for the same billing period.
+ *
+ * Guards:
+ * - invoice.subscription must be present (non-subscription invoices → skip)
+ * - Unknown customer → skip silently (returns 200 to Stripe)
+ * - creditsPerMonth sourced from our subscriptions table (not Stripe metadata)
+ */
+async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
+  // Only handle subscription invoices (parent.subscription_details is populated)
+  const subscriptionRef =
+    invoice.parent?.subscription_details?.subscription ?? null;
+  if (!subscriptionRef) return;
+
+  const subscriptionId =
+    typeof subscriptionRef === "string"
+      ? subscriptionRef
+      : subscriptionRef.id;
+
+  const stripeCustomerId =
+    typeof invoice.customer === "string"
+      ? invoice.customer
+      : invoice.customer?.id ?? null;
+
+  if (!stripeCustomerId) return;
+
+  const userId = await getUserIdByStripeCustomerId(stripeCustomerId);
+  if (!userId) return; // Unknown customer — silently skip
+
+  // Look up credits from our subscriptions table (not Stripe metadata)
+  const [subscription] = await db
+    .select({ creditsPerMonth: subscriptions.creditsPerMonth })
+    .from(subscriptions)
+    .where(eq(subscriptions.stripeSubscriptionId, subscriptionId))
+    .limit(1);
+
+  if (!subscription) return; // No subscription record — skip silently
+
+  const periodStart = invoice.period_start;
+  const idempotencyKey = `sub-${subscriptionId}-${periodStart}`;
+
+  await awardCredits({
+    userId,
+    amount: subscription.creditsPerMonth,
+    type: "subscription_grant",
+    description: `Subscription renewal: ${subscription.creditsPerMonth} credits`,
+    idempotencyKey,
+  });
 }
 
 async function handleSubscriptionDeleted(stripeSubscription: Stripe.Subscription) {

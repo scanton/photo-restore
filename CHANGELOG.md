@@ -2,6 +2,18 @@
 
 All notable changes to PicRenew will be documented in this file.
 
+## [0.3.0.0] - 2026-03-19
+
+### Added
+- `src/lib/products.ts` — server-side Stripe product registry with all 7 products (3 credit packs, 4 subscription tiers), real Stripe price IDs, credit amounts, and type guards (`isCreditPack`, `isSubscription`, `VALID_PRICE_IDS`). Single source of truth — `metadata.credits` always sourced here, never from client input.
+- `POST /api/restore/[id]/purchase` — credit debit endpoint. Atomically debits credits and transitions restoration to `processing`. Cost is `preset.creditsCost × resolution multiplier` (1×/2×/3× for 1k/2k/4k). Validates auth (401), ownership (403), `pending_payment` status (400), and insufficient credits (402). Idempotency key scoped per restoration prevents double-debit.
+- `POST /api/checkout/create` — Stripe Checkout Session creation. Validates `priceId` against `products.ts` (400 on unknown). Creates/reuses Stripe customer idempotently — no duplicate customers. Sets `metadata.credits` from the server-side product registry. Chooses `"payment"` vs `"subscription"` mode by product type.
+- `invoice.payment_succeeded` webhook handler — closes the critical gap where subscription renewals never awarded credits. Awards `creditsPerMonth` from the `subscriptions` table (not Stripe metadata). Idempotency key `sub-{subId}-{periodStart}` prevents double-grant on Stripe retries. Non-subscription invoices and unknown customers silently skipped (200 to Stripe).
+- `resolution` pgEnum (`"1k" | "2k" | "4k"`) and column on `restorations` table, defaults to `"1k"`. Run `npx drizzle-kit push` to sync the database.
+
+### Testing
+- 54 new tests: purchase endpoint (14), checkout/create (11), products registry (24), invoice webhook (7). Total: 93 passing across 7 test files.
+
 ## [0.2.0.0] - 2026-03-19
 
 ### Added
@@ -27,7 +39,7 @@ All notable changes to PicRenew will be documented in this file.
 - Upload route MIME spoofing: magic byte validation added (JPEG/PNG/GIF/WebP) alongside client-controlled MIME type check
 - Restore page polling stale closure: replaced `data`-in-deps pattern with `useRef` for status tracking; removed `eslint-disable` comment
 
-### Changed
+### For contributors
 - `src/lib/db/schema.ts` is now pure table/enum definitions; DB connection (`Pool`, `drizzle()`) moved to `src/lib/db/index.ts`
 - `credit_ledger` table now has an index on `user_id` for balance sum query performance
 

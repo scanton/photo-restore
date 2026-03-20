@@ -10,6 +10,12 @@ export async function GET(
   try {
     const { id } = await params;
 
+    // Reject non-UUID IDs immediately — Postgres will throw a type error otherwise
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: "Invalid restoration ID." }, { status: 400 });
+    }
+
     const [restoration] = await db
       .select()
       .from(restorations)

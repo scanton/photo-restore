@@ -33,8 +33,15 @@ function isValidImageBuffer(buf: Buffer): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  // Parse form data first — req.formData() throws if body is missing or wrong content-type
+  let formData: FormData;
   try {
-    const formData = await req.formData();
+    formData = await req.formData();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  try {
     const file = formData.get("file");
     const preset = (formData.get("preset") as string) || "standard";
 

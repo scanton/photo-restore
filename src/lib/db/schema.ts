@@ -23,6 +23,8 @@ export const creditTypeEnum = pgEnum("credit_type", [
   "subscription_grant",
 ]);
 
+export const resolutionEnum = pgEnum("resolution", ["1k", "2k", "4k"]);
+
 export const restorationStatusEnum = pgEnum("restoration_status", [
   "analyzing",
   "watermarking",
@@ -127,6 +129,7 @@ export const restorations = pgTable("restorations", {
   eraConfidence: real("era_confidence"),
   kieAiJobId: text("kie_ai_job_id"),
   idempotencyKey: text("idempotency_key").unique(),
+  resolution: resolutionEnum("resolution").default("1k").notNull(),
   creditsCharged: integer("credits_charged").default(1).notNull(),
   batchJobId: uuid("batch_job_id"),
   expiresAt: timestamp("expires_at"),
