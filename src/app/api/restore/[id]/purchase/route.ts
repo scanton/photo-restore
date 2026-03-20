@@ -13,8 +13,10 @@ const RESOLUTION_MULTIPLIER: Record<string, number> = {
   "4k": 3,
 };
 
+const VALID_RESOLUTIONS = new Set(["1k", "2k", "4k"]);
+
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   // 1. Auth gate
@@ -26,7 +28,22 @@ export async function POST(
 
   const { id } = await params;
 
-  // 2. Load restoration
+  // 2. Parse optional resolution override from request body
+  let chosenResolution: string | null = null;
+  try {
+    const body = (await req.json()) as { resolution?: unknown };
+    if (
+      body.resolution &&
+      typeof body.resolution === "string" &&
+      VALID_RESOLUTIONS.has(body.resolution)
+    ) {
+      chosenResolution = body.resolution;
+    }
+  } catch {
+    // body is optional — ignore parse errors
+  }
+
+  // 3. Load restoration
   const [restoration] = await db
     .select()
     .from(restorations)
@@ -40,12 +57,12 @@ export async function POST(
     );
   }
 
-  // 3. IDOR: must own the restoration
+  // 4. IDOR: must own the restoration
   if (restoration.userId !== userId) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
 
-  // 4. Must be in pending_payment status
+  // 5. Must be in pending_payment status
   if (restoration.status !== "pending_payment") {
     return NextResponse.json(
       {
@@ -55,28 +72,30 @@ export async function POST(
     );
   }
 
-  // 5. Compute cost: preset base cost × resolution multiplier
+  // 6. Compute cost: preset base cost × resolution multiplier
+  //    Use client-supplied resolution if valid, fall back to DB value
+  const resolution = chosenResolution ?? restoration.resolution;
   const preset = PRESETS.find((p) => p.slug === restoration.presetId);
   const baseCost = preset?.creditsCost ?? 1;
-  const multiplier = RESOLUTION_MULTIPLIER[restoration.resolution] ?? 1;
+  const multiplier = RESOLUTION_MULTIPLIER[resolution] ?? 1;
   const creditCost = baseCost * multiplier;
 
-  // 6. Atomically debit credits and update status
+  // 7. Atomically debit credits and update status + resolution
   try {
     await debitCredits({
       userId,
       amount: creditCost,
-      description: `Restore ${restoration.id} (${restoration.resolution})`,
+      description: `Restore ${restoration.id} (${resolution})`,
       idempotencyKey: `purchase-${restoration.id}`,
       restorationId: restoration.id,
     });
 
     await db
       .update(restorations)
-      .set({ status: "processing", creditsCharged: creditCost })
+      .set({ status: "processing", creditsCharged: creditCost, resolution: resolution as "1k" | "2k" | "4k" })
       .where(eq(restorations.id, id));
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, creditCost, resolution });
   } catch (err) {
     if (err instanceof InsufficientCreditsError) {
       return NextResponse.json(

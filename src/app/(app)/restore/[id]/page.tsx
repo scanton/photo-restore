@@ -13,6 +13,8 @@ type RestorationStatus =
   | "complete"
   | "failed";
 
+type Resolution = "1k" | "2k" | "4k";
+
 interface StatusResponse {
   id: string;
   status: RestorationStatus;
@@ -23,6 +25,18 @@ interface StatusResponse {
   eraConfidence?: number | null;
   creditsCharged: number;
 }
+
+// Credit cost per resolution (base × multiplier for standard preset)
+const RESOLUTION_OPTIONS: {
+  value: Resolution;
+  label: string;
+  credits: number;
+  description: string;
+}[] = [
+  { value: "1k", label: "Standard", credits: 1, description: "1K · great for sharing" },
+  { value: "2k", label: "High Res", credits: 2, description: "2K · ideal for printing" },
+  { value: "4k", label: "Museum",   credits: 3, description: "4K · archival quality" },
+];
 
 const STATUS_LABELS: Record<RestorationStatus, string> = {
   analyzing: "Analyzing your photo…",
@@ -42,6 +56,8 @@ export default function RestorePage() {
   const [data, setData] = useState<StatusResponse | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [purchasing, setPurchasing] = useState(false);
+  const [resolution, setResolution] = useState<Resolution>("1k");
+  const [balance, setBalance] = useState<number | null>(null);
 
   // Ref always holds the latest status so the interval callback doesn't capture stale state
   const statusRef = useRef<RestorationStatus | null>(null);
@@ -63,6 +79,14 @@ export default function RestorePage() {
       setFetchError(err instanceof Error ? err.message : "Unknown error.");
     }
   }, [id]);
+
+  // Fetch credit balance for "Use Credits" affordance
+  useEffect(() => {
+    void fetch("/api/credits/balance")
+      .then((r) => r.json())
+      .then((d: { balance?: number }) => setBalance(d.balance ?? 0))
+      .catch(() => setBalance(0));
+  }, []);
 
   // Polling — uses statusRef so the interval always sees the current status
   // without needing data in the dependency array (avoids stale closure + eslint-disable)
@@ -86,14 +110,23 @@ export default function RestorePage() {
     try {
       const res = await fetch(`/api/restore/${id}/purchase`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resolution }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string };
+        const body = await res.json().catch(() => ({})) as { error?: string; code?: string };
+        if (body.code === "insufficient_credits") {
+          window.location.href = "/billing";
+          return;
+        }
         alert(body.error ?? "Purchase failed. Please try again.");
         return;
       }
-      // Refresh status after purchase
+      // Refresh status and balance after purchase
       await fetchStatus();
+      void fetch("/api/credits/balance")
+        .then((r) => r.json())
+        .then((d: { balance?: number }) => setBalance(d.balance ?? 0));
     } catch {
       alert("Something went wrong. Please try again.");
     } finally {
@@ -289,55 +322,115 @@ export default function RestorePage() {
               className="rounded-[16px] p-8"
               style={{ backgroundColor: "#F2EDE5" }}
             >
-              {status === "pending_payment" && (
-                <>
-                  <h2
-                    className="text-xl font-light mb-2"
-                    style={{
-                      fontFamily: "var(--font-fraunces), Georgia, serif",
-                      color: "#1C1410",
-                    }}
-                  >
-                    Your restoration is ready.
-                  </h2>
-                  <p className="text-sm mb-6" style={{ color: "#6B5D52" }}>
-                    Unlock the full-resolution version to download, print, and
-                    keep forever.
-                  </p>
+              {status === "pending_payment" && (() => {
+                const selectedOption = RESOLUTION_OPTIONS.find((o) => o.value === resolution)!;
+                const hasCredits = balance !== null && balance >= selectedOption.credits;
 
-                  <div
-                    className="flex items-center justify-between py-3 px-4 rounded-[8px] mb-6"
-                    style={{ backgroundColor: "#E8E0D4" }}
-                  >
-                    <span className="text-sm font-medium" style={{ color: "#1C1410" }}>
-                      Standard Restore
-                    </span>
-                    <span
-                      className="text-sm font-medium"
+                return (
+                  <>
+                    <h2
+                      className="text-xl font-light mb-2"
                       style={{
-                        fontFamily: "var(--font-mono), monospace",
-                        color: "#B5622A",
-                        fontVariantNumeric: "tabular-nums",
+                        fontFamily: "var(--font-fraunces), Georgia, serif",
+                        color: "#1C1410",
                       }}
                     >
-                      {data.creditsCharged} credit{data.creditsCharged !== 1 ? "s" : ""}
-                    </span>
-                  </div>
+                      Your restoration is ready.
+                    </h2>
+                    <p className="text-sm mb-6" style={{ color: "#6B5D52" }}>
+                      Choose your output resolution, then unlock to download,
+                      print, and keep forever.
+                    </p>
 
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    className="w-full"
-                    loading={purchasing}
-                    onClick={() => void handlePurchase()}
-                  >
-                    Download full resolution
-                  </Button>
-                  <p className="mt-3 text-xs text-center" style={{ color: "#A89380" }}>
-                    Uses {data.creditsCharged} credit from your balance
-                  </p>
-                </>
-              )}
+                    {/* Resolution picker */}
+                    <div className="mb-5">
+                      <p
+                        className="text-xs font-semibold uppercase tracking-widest mb-3"
+                        style={{ color: "#A89380", letterSpacing: "0.08em" }}
+                      >
+                        Output resolution
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        {RESOLUTION_OPTIONS.map((opt) => {
+                          const isSelected = resolution === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              onClick={() => setResolution(opt.value)}
+                              className="flex items-center justify-between px-4 py-3 rounded-[8px] border text-left transition-colors"
+                              style={{
+                                backgroundColor: isSelected ? "#E8C5A8" : "#E8E0D4",
+                                borderColor: isSelected ? "#B5622A" : "transparent",
+                              }}
+                            >
+                              <div>
+                                <span
+                                  className="text-sm font-semibold block"
+                                  style={{ color: "#1C1410" }}
+                                >
+                                  {opt.label}
+                                </span>
+                                <span
+                                  className="text-xs"
+                                  style={{ color: "#6B5D52" }}
+                                >
+                                  {opt.description}
+                                </span>
+                              </div>
+                              <span
+                                className="text-sm font-medium shrink-0 ml-3"
+                                style={{
+                                  fontFamily: "var(--font-mono), monospace",
+                                  color: "#B5622A",
+                                  fontVariantNumeric: "tabular-nums",
+                                }}
+                              >
+                                {opt.credits} cr
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Balance indicator */}
+                    {balance !== null && (
+                      <p
+                        className="text-xs mb-4"
+                        style={{ color: hasCredits ? "#6B5D52" : "#B83B3B" }}
+                      >
+                        {hasCredits
+                          ? `You have ${balance} credit${balance !== 1 ? "s" : ""} — ${balance - selectedOption.credits} remaining after this.`
+                          : `You need ${selectedOption.credits} credits but have ${balance}. Buy more below.`}
+                      </p>
+                    )}
+
+                    {/* Primary CTA: Use Credits */}
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      className="w-full"
+                      loading={purchasing}
+                      disabled={!hasCredits}
+                      onClick={() => void handlePurchase()}
+                    >
+                      Use {selectedOption.credits} credit{selectedOption.credits !== 1 ? "s" : ""} — download
+                    </Button>
+
+                    {/* Secondary CTA: Buy Credits */}
+                    <div className="mt-3">
+                      <Button
+                        variant="secondary"
+                        size="md"
+                        className="w-full"
+                        onClick={() => (window.location.href = "/billing")}
+                      >
+                        {hasCredits ? "Buy more credits" : "Buy credits to continue →"}
+                      </Button>
+                    </div>
+                  </>
+                );
+              })()}
 
               {isComplete && (
                 <>
