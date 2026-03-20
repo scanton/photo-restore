@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { BeforeAfterSlider } from "@/components/before-after-slider";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,12 @@ export default function RestorePage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [purchasing, setPurchasing] = useState(false);
 
+  // Ref always holds the latest status so the interval callback doesn't capture stale state
+  const statusRef = useRef<RestorationStatus | null>(null);
+  useEffect(() => {
+    statusRef.current = data?.status ?? null;
+  }, [data?.status]);
+
   const fetchStatus = useCallback(async () => {
     try {
       const res = await fetch(`/api/restore/${id}/status`);
@@ -58,14 +64,14 @@ export default function RestorePage() {
     }
   }, [id]);
 
-  // Polling
+  // Polling — uses statusRef so the interval always sees the current status
+  // without needing data in the dependency array (avoids stale closure + eslint-disable)
   useEffect(() => {
     void fetchStatus();
 
-    const terminalStatuses: RestorationStatus[] = ["complete", "failed"];
-
     const intervalId = setInterval(() => {
-      if (data && terminalStatuses.includes(data.status)) {
+      const current = statusRef.current;
+      if (current === "complete" || current === "failed") {
         clearInterval(intervalId);
         return;
       }
@@ -73,7 +79,7 @@ export default function RestorePage() {
     }, POLL_INTERVAL);
 
     return () => clearInterval(intervalId);
-  }, [fetchStatus, data?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchStatus]);
 
   const handlePurchase = async () => {
     setPurchasing(true);
