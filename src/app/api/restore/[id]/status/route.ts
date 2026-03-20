@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, restorations } from "@/lib/db/schema";
+import { db, restorations } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 
