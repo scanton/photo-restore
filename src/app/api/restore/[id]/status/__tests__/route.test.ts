@@ -4,8 +4,8 @@ import { NextRequest } from "next/server";
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 const mockRestorationRow = {
-  id: "resto-123",
-  userId: "user-abc",
+  id: "00000000-0000-0000-0000-000000000123",
+  userId: "00000000-0000-0000-0000-0000000000ab",
   status: "complete",
   inputBlobUrl: "https://blob.vercel.com/input.jpg",
   watermarkedBlobUrl: "https://blob.vercel.com/watermark.jpg",
@@ -57,7 +57,7 @@ describe("GET /api/restore/[id]/status", () => {
 
   it("returns 404 when restoration does not exist", async () => {
     mockLimit.mockResolvedValue([]);
-    const res = await callGET("nonexistent-id");
+    const res = await callGET("00000000-0000-0000-0000-000000000000");
     expect(res.status).toBe(404);
     const body = await res.json() as { error: string };
     expect(body.error).toMatch(/not found/i);
@@ -69,24 +69,24 @@ describe("GET /api/restore/[id]/status", () => {
     const { auth } = await import("@/lib/auth");
     vi.mocked(auth).mockResolvedValue(null); // no session needed
 
-    const res = await callGET("resto-123");
+    const res = await callGET("00000000-0000-0000-0000-000000000123");
     expect(res.status).toBe(200);
     const body = await res.json() as typeof mockRestorationRow;
-    expect(body.id).toBe("resto-123");
+    expect(body.id).toBe("00000000-0000-0000-0000-000000000123");
     expect(body.status).toBe("complete");
     // auth() should NOT be called for anonymous restorations
     expect(auth).not.toHaveBeenCalled();
   });
 
   it("returns 403 when authenticated user tries to access another user's restoration", async () => {
-    mockLimit.mockResolvedValue([mockRestorationRow]); // owned by "user-abc"
+    mockLimit.mockResolvedValue([mockRestorationRow]); // owned by "00000000-0000-0000-0000-0000000000ab"
     const { auth } = await import("@/lib/auth");
     vi.mocked(auth).mockResolvedValue({
       user: { id: "user-xyz" }, // different user
       expires: new Date().toISOString(),
     });
 
-    const res = await callGET("resto-123");
+    const res = await callGET("00000000-0000-0000-0000-000000000123");
     expect(res.status).toBe(403);
     const body = await res.json() as { error: string };
     expect(body.error).toMatch(/not authorized/i);
@@ -97,22 +97,22 @@ describe("GET /api/restore/[id]/status", () => {
     const { auth } = await import("@/lib/auth");
     vi.mocked(auth).mockResolvedValue(null); // no session
 
-    const res = await callGET("resto-123");
+    const res = await callGET("00000000-0000-0000-0000-000000000123");
     expect(res.status).toBe(403);
   });
 
   it("returns restoration data for the correct authenticated owner", async () => {
-    mockLimit.mockResolvedValue([mockRestorationRow]); // owned by "user-abc"
+    mockLimit.mockResolvedValue([mockRestorationRow]); // owned by "00000000-0000-0000-0000-0000000000ab"
     const { auth } = await import("@/lib/auth");
     vi.mocked(auth).mockResolvedValue({
-      user: { id: "user-abc" }, // same user
+      user: { id: "00000000-0000-0000-0000-0000000000ab" }, // same user
       expires: new Date().toISOString(),
     });
 
-    const res = await callGET("resto-123");
+    const res = await callGET("00000000-0000-0000-0000-000000000123");
     expect(res.status).toBe(200);
     const body = await res.json() as typeof mockRestorationRow;
-    expect(body.id).toBe("resto-123");
+    expect(body.id).toBe("00000000-0000-0000-0000-000000000123");
     expect(body.eraEstimate).toBe("1960s");
   });
 });

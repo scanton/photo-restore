@@ -43,7 +43,13 @@ export async function POST(
     // body is optional — ignore parse errors
   }
 
-  // 3. Load restoration
+  // 3. Validate UUID format before hitting the DB (Postgres throws on invalid UUID type)
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_RE.test(id)) {
+    return NextResponse.json({ error: "Invalid restoration ID." }, { status: 400 });
+  }
+
+  // 4. Load restoration
   const [restoration] = await db
     .select()
     .from(restorations)

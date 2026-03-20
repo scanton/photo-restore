@@ -4,8 +4,8 @@ import { NextRequest } from "next/server";
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
 const BASE_RESTORATION = {
-  id: "resto-123",
-  userId: "user-abc",
+  id: "00000000-0000-0000-0000-000000000123",
+  userId: "00000000-0000-0000-0000-0000000000ab",
   status: "pending_payment" as const,
   presetId: "standard", // creditsCost: 1
   resolution: "1k" as const,
@@ -88,7 +88,7 @@ describe("POST /api/restore/[id]/purchase", () => {
     const { auth } = await import("@/lib/auth");
     vi.mocked(auth).mockResolvedValue(null);
 
-    const res = await callPOST("resto-123");
+    const res = await callPOST("00000000-0000-0000-0000-000000000123");
     expect(res.status).toBe(401);
   });
 
@@ -96,19 +96,19 @@ describe("POST /api/restore/[id]/purchase", () => {
 
   it("returns 404 when restoration does not exist", async () => {
     const { auth } = await import("@/lib/auth");
-    vi.mocked(auth).mockResolvedValue({ user: { id: "user-abc" }, expires: "" });
+    vi.mocked(auth).mockResolvedValue({ user: { id: "00000000-0000-0000-0000-0000000000ab" }, expires: "" });
     mockSelectLimit.mockResolvedValue([]);
 
-    const res = await callPOST("nonexistent");
+    const res = await callPOST("00000000-0000-0000-0000-000000000000");
     expect(res.status).toBe(404);
   });
 
   it("returns 403 when restoration belongs to a different user", async () => {
     const { auth } = await import("@/lib/auth");
     vi.mocked(auth).mockResolvedValue({ user: { id: "user-xyz" }, expires: "" });
-    mockSelectLimit.mockResolvedValue([{ ...BASE_RESTORATION }]); // owned by user-abc
+    mockSelectLimit.mockResolvedValue([{ ...BASE_RESTORATION }]); // owned by 00000000-0000-0000-0000-0000000000ab
 
-    const res = await callPOST("resto-123");
+    const res = await callPOST("00000000-0000-0000-0000-000000000123");
     expect(res.status).toBe(403);
   });
 
@@ -116,12 +116,12 @@ describe("POST /api/restore/[id]/purchase", () => {
 
   it("returns 400 when restoration is not in pending_payment status", async () => {
     const { auth } = await import("@/lib/auth");
-    vi.mocked(auth).mockResolvedValue({ user: { id: "user-abc" }, expires: "" });
+    vi.mocked(auth).mockResolvedValue({ user: { id: "00000000-0000-0000-0000-0000000000ab" }, expires: "" });
     mockSelectLimit.mockResolvedValue([
       { ...BASE_RESTORATION, status: "processing" },
     ]);
 
-    const res = await callPOST("resto-123");
+    const res = await callPOST("00000000-0000-0000-0000-000000000123");
     expect(res.status).toBe(400);
     const body = await res.json() as { error: string };
     expect(body.error).toMatch(/processing/i);
@@ -129,12 +129,12 @@ describe("POST /api/restore/[id]/purchase", () => {
 
   it("returns 400 when restoration is already complete", async () => {
     const { auth } = await import("@/lib/auth");
-    vi.mocked(auth).mockResolvedValue({ user: { id: "user-abc" }, expires: "" });
+    vi.mocked(auth).mockResolvedValue({ user: { id: "00000000-0000-0000-0000-0000000000ab" }, expires: "" });
     mockSelectLimit.mockResolvedValue([
       { ...BASE_RESTORATION, status: "complete" },
     ]);
 
-    const res = await callPOST("resto-123");
+    const res = await callPOST("00000000-0000-0000-0000-000000000123");
     expect(res.status).toBe(400);
   });
 
@@ -142,24 +142,24 @@ describe("POST /api/restore/[id]/purchase", () => {
 
   it("debits 1 credit for standard preset at 1k resolution", async () => {
     const { auth } = await import("@/lib/auth");
-    vi.mocked(auth).mockResolvedValue({ user: { id: "user-abc" }, expires: "" });
+    vi.mocked(auth).mockResolvedValue({ user: { id: "00000000-0000-0000-0000-0000000000ab" }, expires: "" });
     mockSelectLimit.mockResolvedValue([{ ...BASE_RESTORATION }]); // standard/1k
 
-    await callPOST("resto-123");
+    await callPOST("00000000-0000-0000-0000-000000000123");
 
     expect(mockDebitCredits).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: "user-abc", amount: 1 })
+      expect.objectContaining({ userId: "00000000-0000-0000-0000-0000000000ab", amount: 1 })
     );
   });
 
   it("debits 2 credits for standard preset at 2k resolution (1cr × 2×)", async () => {
     const { auth } = await import("@/lib/auth");
-    vi.mocked(auth).mockResolvedValue({ user: { id: "user-abc" }, expires: "" });
+    vi.mocked(auth).mockResolvedValue({ user: { id: "00000000-0000-0000-0000-0000000000ab" }, expires: "" });
     mockSelectLimit.mockResolvedValue([
       { ...BASE_RESTORATION, resolution: "2k" },
     ]);
 
-    await callPOST("resto-123");
+    await callPOST("00000000-0000-0000-0000-000000000123");
 
     expect(mockDebitCredits).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 2 })
@@ -168,12 +168,12 @@ describe("POST /api/restore/[id]/purchase", () => {
 
   it("debits 3 credits for standard preset at 4k resolution (1cr × 3×)", async () => {
     const { auth } = await import("@/lib/auth");
-    vi.mocked(auth).mockResolvedValue({ user: { id: "user-abc" }, expires: "" });
+    vi.mocked(auth).mockResolvedValue({ user: { id: "00000000-0000-0000-0000-0000000000ab" }, expires: "" });
     mockSelectLimit.mockResolvedValue([
       { ...BASE_RESTORATION, resolution: "4k" },
     ]);
 
-    await callPOST("resto-123");
+    await callPOST("00000000-0000-0000-0000-000000000123");
 
     expect(mockDebitCredits).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 3 })
@@ -182,12 +182,12 @@ describe("POST /api/restore/[id]/purchase", () => {
 
   it("debits 4 credits for colorize preset at 2k resolution (2cr × 2×)", async () => {
     const { auth } = await import("@/lib/auth");
-    vi.mocked(auth).mockResolvedValue({ user: { id: "user-abc" }, expires: "" });
+    vi.mocked(auth).mockResolvedValue({ user: { id: "00000000-0000-0000-0000-0000000000ab" }, expires: "" });
     mockSelectLimit.mockResolvedValue([
       { ...BASE_RESTORATION, presetId: "colorize", resolution: "2k" },
     ]);
 
-    await callPOST("resto-123");
+    await callPOST("00000000-0000-0000-0000-000000000123");
 
     expect(mockDebitCredits).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 4 })
@@ -196,13 +196,13 @@ describe("POST /api/restore/[id]/purchase", () => {
 
   it("uses idempotency key scoped to restoration id", async () => {
     const { auth } = await import("@/lib/auth");
-    vi.mocked(auth).mockResolvedValue({ user: { id: "user-abc" }, expires: "" });
+    vi.mocked(auth).mockResolvedValue({ user: { id: "00000000-0000-0000-0000-0000000000ab" }, expires: "" });
     mockSelectLimit.mockResolvedValue([{ ...BASE_RESTORATION }]);
 
-    await callPOST("resto-123");
+    await callPOST("00000000-0000-0000-0000-000000000123");
 
     expect(mockDebitCredits).toHaveBeenCalledWith(
-      expect.objectContaining({ idempotencyKey: "purchase-resto-123" })
+      expect.objectContaining({ idempotencyKey: "purchase-00000000-0000-0000-0000-000000000123" })
     );
   });
 
@@ -210,10 +210,10 @@ describe("POST /api/restore/[id]/purchase", () => {
 
   it("updates restoration status to processing on successful debit", async () => {
     const { auth } = await import("@/lib/auth");
-    vi.mocked(auth).mockResolvedValue({ user: { id: "user-abc" }, expires: "" });
+    vi.mocked(auth).mockResolvedValue({ user: { id: "00000000-0000-0000-0000-0000000000ab" }, expires: "" });
     mockSelectLimit.mockResolvedValue([{ ...BASE_RESTORATION }]);
 
-    const res = await callPOST("resto-123");
+    const res = await callPOST("00000000-0000-0000-0000-000000000123");
     expect(res.status).toBe(200);
     const body = await res.json() as { success: boolean };
     expect(body.success).toBe(true);
@@ -224,11 +224,11 @@ describe("POST /api/restore/[id]/purchase", () => {
 
   it("succeeds when user has exactly enough credits (balance === cost)", async () => {
     const { auth } = await import("@/lib/auth");
-    vi.mocked(auth).mockResolvedValue({ user: { id: "user-abc" }, expires: "" });
+    vi.mocked(auth).mockResolvedValue({ user: { id: "00000000-0000-0000-0000-0000000000ab" }, expires: "" });
     mockSelectLimit.mockResolvedValue([{ ...BASE_RESTORATION }]); // cost = 1
     mockDebitCredits.mockResolvedValue(0); // balance = 1, after debit = 0
 
-    const res = await callPOST("resto-123");
+    const res = await callPOST("00000000-0000-0000-0000-000000000123");
     expect(res.status).toBe(200);
   });
 
@@ -236,13 +236,13 @@ describe("POST /api/restore/[id]/purchase", () => {
 
   it("returns 402 when user has insufficient credits", async () => {
     const { auth } = await import("@/lib/auth");
-    vi.mocked(auth).mockResolvedValue({ user: { id: "user-abc" }, expires: "" });
+    vi.mocked(auth).mockResolvedValue({ user: { id: "00000000-0000-0000-0000-0000000000ab" }, expires: "" });
     mockSelectLimit.mockResolvedValue([{ ...BASE_RESTORATION }]);
 
     const { InsufficientCreditsError } = await import("@/lib/credits");
     mockDebitCredits.mockRejectedValue(new InsufficientCreditsError(0, 1));
 
-    const res = await callPOST("resto-123");
+    const res = await callPOST("00000000-0000-0000-0000-000000000123");
     expect(res.status).toBe(402);
     const body = await res.json() as { error: string; code: string };
     expect(body.code).toBe("insufficient_credits");
@@ -250,7 +250,7 @@ describe("POST /api/restore/[id]/purchase", () => {
 
   it("returns 402 when user has 1 fewer credit than needed", async () => {
     const { auth } = await import("@/lib/auth");
-    vi.mocked(auth).mockResolvedValue({ user: { id: "user-abc" }, expires: "" });
+    vi.mocked(auth).mockResolvedValue({ user: { id: "00000000-0000-0000-0000-0000000000ab" }, expires: "" });
     // 4k restoration costs 3 credits
     mockSelectLimit.mockResolvedValue([
       { ...BASE_RESTORATION, resolution: "4k" },
@@ -259,7 +259,7 @@ describe("POST /api/restore/[id]/purchase", () => {
     const { InsufficientCreditsError } = await import("@/lib/credits");
     mockDebitCredits.mockRejectedValue(new InsufficientCreditsError(2, 3));
 
-    const res = await callPOST("resto-123");
+    const res = await callPOST("00000000-0000-0000-0000-000000000123");
     expect(res.status).toBe(402);
   });
 });
