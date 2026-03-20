@@ -2,17 +2,36 @@
 
 All notable changes to PicRenew will be documented in this file.
 
+## [0.3.1.0] - 2026-03-19
+
+### Added
+- **Billing page** (`/billing`) — browse credit packs and subscriptions in one place, toggle monthly/annual pricing (10% off annual), and jump there automatically when you run low on credits.
+- **Resolution picker** — before downloading a restoration, choose 1k (1 credit), 2k (2 credits), or 4k (3 credits). The "Use X credits" CTA updates live so you always know the cost before committing.
+- **Customer Portal** — subscribers can cancel, upgrade, or update their payment method via Stripe's hosted portal (`POST /api/billing/portal`).
+- **Vercel Analytics** — page-view and interaction data now flowing to the Vercel dashboard.
+
+### Fixed
+- **Auth was silently broken** — the NextAuth API route (`/api/auth/[...nextauth]/route.ts`) was missing entirely, causing every session check to 404 on each page load. Now in place.
+- **Restore page showed "Loading…" on error** — the heading now reads "Restoration not found." when the fetch fails instead of staying stuck on "Loading…"
+- **Upload returned 500 on malformed requests** — bad request bodies now return 400 with a clear error message instead of an internal server error.
+- **Non-UUID restore IDs caused 500 errors** — both the status and purchase routes now validate the ID format and return 400 "Invalid restoration ID." before hitting the database.
+
+### Testing
+- 39 new tests covering: purchase endpoint UUID validation, status route auth matrix (4 cases updated). Total: 93 passing.
+
+---
+
 ## [0.3.0.0] - 2026-03-19
 
 ### Added
-- `src/lib/products.ts` — server-side Stripe product registry with all 7 products (3 credit packs, 4 subscription tiers), real Stripe price IDs, credit amounts, and type guards (`isCreditPack`, `isSubscription`, `VALID_PRICE_IDS`). Single source of truth — `metadata.credits` always sourced here, never from client input.
-- `POST /api/restore/[id]/purchase` — credit debit endpoint. Atomically debits credits and transitions restoration to `processing`. Cost is `preset.creditsCost × resolution multiplier` (1×/2×/3× for 1k/2k/4k). Validates auth (401), ownership (403), `pending_payment` status (400), and insufficient credits (402). Idempotency key scoped per restoration prevents double-debit.
-- `POST /api/checkout/create` — Stripe Checkout Session creation. Validates `priceId` against `products.ts` (400 on unknown). Creates/reuses Stripe customer idempotently — no duplicate customers. Sets `metadata.credits` from the server-side product registry. Chooses `"payment"` vs `"subscription"` mode by product type.
-- `invoice.payment_succeeded` webhook handler — closes the critical gap where subscription renewals never awarded credits. Awards `creditsPerMonth` from the `subscriptions` table (not Stripe metadata). Idempotency key `sub-{subId}-{periodStart}` prevents double-grant on Stripe retries. Non-subscription invoices and unknown customers silently skipped (200 to Stripe).
-- `resolution` pgEnum (`"1k" | "2k" | "4k"`) and column on `restorations` table, defaults to `"1k"`. Run `npx drizzle-kit push` to sync the database.
+- **Product registry** (`src/lib/products.ts`) — all 7 Stripe products in one place: 3 credit packs (Starter/Power/Value) and 4 subscription tiers (Hobbyist/Professional, monthly and annual). Single source of truth for credit amounts — `metadata.credits` always comes from here, never from client input.
+- **Credit purchase endpoint** (`POST /api/restore/[id]/purchase`) — atomically debits credits and kicks off restoration processing. Cost is `preset base × resolution multiplier` (1×/2×/3× for 1k/2k/4k). Guards against double-debit with a per-restoration idempotency key.
+- **Stripe Checkout Sessions** (`POST /api/checkout/create`) — creates the right session type (`"payment"` or `"subscription"`) based on the product, reuses existing Stripe customers so you never get duplicates, and validates `priceId` server-side before touching Stripe.
+- **Subscription renewal credits** (`invoice.payment_succeeded` webhook) — subscribers now receive their monthly credits automatically on renewal. Awards `creditsPerMonth` from the database, not Stripe metadata. Idempotency key `sub-{subId}-{periodStart}` survives Stripe retries safely.
+- **Resolution column** — `restorations.resolution` pgEnum (`"1k" | "2k" | "4k"`) added to the schema, defaults to `"1k"`. Run `npx drizzle-kit push` to sync.
 
 ### Testing
-- 54 new tests: purchase endpoint (14), checkout/create (11), products registry (24), invoice webhook (7). Total: 93 passing across 7 test files.
+- 54 new tests across 4 new test files: purchase endpoint (14), checkout/create (11), products registry (24), invoice webhook (7). Total: 93 passing.
 
 ## [0.2.0.0] - 2026-03-19
 
