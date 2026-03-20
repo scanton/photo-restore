@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, restorations } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { debitCredits, InsufficientCreditsError } from "@/lib/credits";
+import { debitCredits, InsufficientCreditsError, awardCredits } from "@/lib/credits";
 import { PRESETS } from "@/lib/presets";
+import { qstash, buildFailureCallback } from "@/lib/qstash";
+import { sendRestorationReadyEmail } from "@/lib/email/send";
 
 // Resolution → credit multiplier
 // 1K = 1× (base), 2K = 2×, 4K = 3×
@@ -86,7 +88,7 @@ export async function POST(
   const multiplier = RESOLUTION_MULTIPLIER[resolution] ?? 1;
   const creditCost = baseCost * multiplier;
 
-  // 7. Atomically debit credits and update status + resolution
+  // 7. Atomically debit credits
   try {
     await debitCredits({
       userId,
@@ -95,13 +97,6 @@ export async function POST(
       idempotencyKey: `purchase-${restoration.id}`,
       restorationId: restoration.id,
     });
-
-    await db
-      .update(restorations)
-      .set({ status: "processing", creditsCharged: creditCost, resolution: resolution as "1k" | "2k" | "4k" })
-      .where(eq(restorations.id, id));
-
-    return NextResponse.json({ success: true, creditCost, resolution });
   } catch (err) {
     if (err instanceof InsufficientCreditsError) {
       return NextResponse.json(
@@ -109,10 +104,77 @@ export async function POST(
         { status: 402 }
       );
     }
-    console.error("[purchase] unexpected error:", err);
+    console.error("[purchase] debit error:", err);
+    return NextResponse.json({ error: "Internal server error." }, { status: 500 });
+  }
+
+  // 8. Branch on resolution:
+  //    1K → mark complete immediately (preview IS the full 1K output, minus watermark)
+  //    2K/4K → mark processing, queue hi-res job via QStash
+  if (resolution === "1k") {
+    // 1K purchase: watermarked preview becomes the download — mark complete now
+    await db
+      .update(restorations)
+      .set({
+        status: "complete",
+        creditsCharged: creditCost,
+        resolution: "1k",
+        // For 1K, the output IS the watermarked preview re-used without watermark.
+        // /api/jobs/restore stores the clean 1K result in outputBlobUrl via kie.ai callback.
+        // If kie.ai hasn't delivered yet, the restore page will poll until complete.
+      })
+      .where(eq(restorations.id, id));
+
+    // Send completion email (no-op for anonymous users)
+    await sendRestorationReadyEmail({ id, userId });
+
+    return NextResponse.json({ success: true, creditCost, resolution });
+  }
+
+  // 2K or 4K: set to processing and queue hi-res job
+  await db
+    .update(restorations)
+    .set({
+      status: "processing",
+      creditsCharged: creditCost,
+      resolution: resolution as "2k" | "4k",
+    })
+    .where(eq(restorations.id, id));
+
+  // Publish restore-hires job — if this fails, roll back status + refund credits
+  const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  const failureCallback = buildFailureCallback(baseUrl);
+
+  try {
+    await qstash.publishJSON({
+      url: `${baseUrl}/api/jobs/restore-hires`,
+      body: { restorationId: id, resolution },
+      retries: 3,
+      ...(failureCallback ? { failureCallback } : {}),
+    });
+  } catch (publishErr) {
+    console.error("[purchase] QStash publish failed, rolling back:", publishErr);
+
+    // Roll back: restore to pending_payment so user can retry
+    await db
+      .update(restorations)
+      .set({ status: "pending_payment", creditsCharged: 0 })
+      .where(eq(restorations.id, id));
+
+    // Refund credits
+    await awardCredits({
+      userId,
+      amount: creditCost,
+      type: "refund",
+      description: `Refund: QStash publish failed for ${id}`,
+      idempotencyKey: `qstash-fail-refund-${id}`,
+    });
+
     return NextResponse.json(
-      { error: "Internal server error." },
+      { error: "Failed to queue restoration job. Your credits have been refunded. Please try again." },
       { status: 500 }
     );
   }
+
+  return NextResponse.json({ success: true, creditCost, resolution });
 }

@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { db, restorations } from "@/lib/db";
+import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import { PRESETS } from "@/lib/presets";
+import { qstash, buildFailureCallback } from "@/lib/qstash";
 import { randomUUID } from "crypto";
 
 const MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
+
+/** Set of valid preset slugs for O(1) validation */
+const VALID_PRESET_SLUGS = new Set(PRESETS.map((p) => p.slug));
 
 /**
  * Validates image file headers (magic bytes) to prevent MIME-spoofing.
@@ -48,6 +54,14 @@ export async function POST(req: NextRequest) {
     if (!file || !(file instanceof File)) {
       return NextResponse.json(
         { error: "No file provided." },
+        { status: 400 }
+      );
+    }
+
+    // Validate preset slug before doing anything expensive
+    if (!VALID_PRESET_SLUGS.has(preset)) {
+      return NextResponse.json(
+        { error: `Unknown preset '${preset}'. Valid presets: ${[...VALID_PRESET_SLUGS].join(", ")}.` },
         { status: 400 }
       );
     }
@@ -98,6 +112,31 @@ export async function POST(req: NextRequest) {
         idempotencyKey: randomUUID(),
       })
       .returning({ id: restorations.id });
+
+    // Publish async job to QStash
+    // QStash will POST { restorationId, presetId } to /api/jobs/restore
+    const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+    const jobUrl = `${baseUrl}/api/jobs/restore`;
+
+    const failureCallback = buildFailureCallback(baseUrl);
+
+    try {
+      await qstash.publishJSON({
+        url: jobUrl,
+        body: { restorationId: restoration.id, presetId: preset },
+        retries: 3,
+        ...(failureCallback ? { failureCallback } : {}),
+      });
+    } catch (publishErr) {
+      console.error("[upload] QStash publish failed, marking restoration as failed:", publishErr);
+      // Mark the restoration as "failed" so it doesn't sit at "analyzing" forever.
+      // The user gets a 500 and can retry the upload.
+      await db
+        .update(restorations)
+        .set({ status: "failed" })
+        .where(eq(restorations.id, restoration.id));
+      throw publishErr; // propagates to outer catch → 500
+    }
 
     return NextResponse.json({
       restorationId: restoration.id,
