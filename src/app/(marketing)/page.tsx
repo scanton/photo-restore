@@ -66,9 +66,20 @@ export default function LandingPage() {
       </header>
 
       <main className="flex-1">
-        {/* Hero */}
-        <section className="mx-auto max-w-[1140px] px-6 pt-24 pb-20 grid lg:grid-cols-2 gap-16 items-center">
-          <div>
+        {/* Hero
+         *
+         * Layout strategy (two-column on lg+):
+         *   LEFT  — headline + description copy
+         *   RIGHT — upload zone (top) + result-preview card (bottom)
+         *
+         * The result-preview card says "Upload above to see the difference."
+         * This is only truthful on desktop where the upload zone sits above it.
+         * On mobile both columns stack vertically (text → upload), so the preview
+         * card stays hidden on mobile to avoid the "above" copy making no sense.
+         */}
+        <section className="mx-auto max-w-[1140px] px-6 pt-24 pb-20 grid lg:grid-cols-2 gap-16 items-start">
+          {/* LEFT: headline + description only */}
+          <div className="lg:pt-2">
             {/* Eyebrow */}
             <p
               className="text-xs font-semibold uppercase tracking-widest mb-6"
@@ -89,24 +100,27 @@ export default function LandingPage() {
             </h1>
 
             <p
-              className="text-lg leading-relaxed mb-10 max-w-md"
+              className="text-lg leading-relaxed max-w-md"
               style={{ color: "#4A3F35" }}
             >
               Upload a faded, scratched, or damaged photo and our AI will restore
               it — returning the detail, color, and life that time has taken away.
             </p>
+          </div>
 
-            {/* Upload zone */}
+          {/* RIGHT: upload zone (always) + result-preview card (lg+ only) */}
+          <div className="flex flex-col gap-6">
+            {/* Upload zone — visible at all breakpoints in this column */}
             <UploadZone onUpload={handleUpload} disabled={uploading} />
 
             {uploadError && (
-              <p className="mt-3 text-sm" style={{ color: "#B83B3B" }}>
+              <p className="text-sm" style={{ color: "#B83B3B" }}>
                 {uploadError}
               </p>
             )}
 
             {uploading && (
-              <div className="mt-4 flex items-center gap-3">
+              <div className="flex items-center gap-3">
                 <svg
                   className="animate-spin"
                   width="18"
@@ -128,53 +142,53 @@ export default function LandingPage() {
                 </p>
               </div>
             )}
-          </div>
 
-          {/* Right: decorative before/after example hint */}
-          <div
-            className="hidden lg:flex flex-col items-center justify-center rounded-[16px] p-10 relative overflow-hidden"
-            style={{ backgroundColor: "#F2EDE5", minHeight: 420 }}
-          >
-            {/* Film grain texture overlay */}
+            {/* Result-preview card — desktop only (upload IS above it here) */}
             <div
-              aria-hidden="true"
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.06'/%3E%3C/svg%3E")`,
-                mixBlendMode: "multiply",
-                opacity: 0.5,
-              }}
-            />
-            <div className="relative text-center">
+              className="hidden lg:flex flex-col items-center justify-center rounded-[16px] p-10 relative overflow-hidden"
+              style={{ backgroundColor: "#F2EDE5", minHeight: 300 }}
+            >
+              {/* Film grain texture overlay */}
               <div
-                className="w-20 h-20 rounded-full mx-auto mb-6 flex items-center justify-center"
-                style={{ backgroundColor: "#E8C5A8" }}
-              >
-                <svg
-                  width="40"
-                  height="40"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#B5622A"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
+                aria-hidden="true"
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.06'/%3E%3C/svg%3E")`,
+                  mixBlendMode: "multiply",
+                  opacity: 0.5,
+                }}
+              />
+              <div className="relative text-center">
+                <div
+                  className="w-20 h-20 rounded-full mx-auto mb-6 flex items-center justify-center"
+                  style={{ backgroundColor: "#E8C5A8" }}
                 >
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <polyline points="21 15 16 10 5 21" />
-                </svg>
+                  <svg
+                    width="40"
+                    height="40"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#B5622A"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <polyline points="21 15 16 10 5 21" />
+                  </svg>
+                </div>
+                <p
+                  className="text-xl font-light"
+                  style={{ fontFamily: "var(--font-fraunces), Georgia, serif", color: "#1C1410" }}
+                >
+                  Your photo, transformed.
+                </p>
+                <p className="mt-2 text-sm" style={{ color: "#8A7A6E" }}>
+                  Upload above to see the difference.
+                </p>
               </div>
-              <p
-                className="text-xl font-light"
-                style={{ fontFamily: "var(--font-fraunces), Georgia, serif", color: "#1C1410" }}
-              >
-                Your photo, transformed.
-              </p>
-              <p className="mt-2 text-sm" style={{ color: "#8A7A6E" }}>
-                Upload above to see the difference.
-              </p>
             </div>
           </div>
         </section>

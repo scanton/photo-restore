@@ -38,6 +38,42 @@
 
 ---
 
+### Completion Email for Anonymous Users
+**What:** At purchase, prompt anonymous users for an optional email address. After restoration completes (status = "complete"), send the download link to that address via Resend — no account required.
+**Why:** Anonymous users are a significant top-of-funnel segment and currently have no fallback if they close the tab after purchasing. The photo is stored for 30 days; without an email link, it's effectively lost.
+**Pros:** Captures revenue from users unwilling to create accounts; dramatically reduces "I lost my photo" support requests.
+**Cons:** Requires storing the email on the restoration record and adding validation at purchase; increases Resend send volume for unverified addresses.
+**Context:** Identified during /plan-eng-review (2026-03-20). The restoration pipeline sends email only when userId is non-null. Anonymous purchases set status = "complete" silently. Implement by adding an optional `notificationEmail` field to the purchase endpoint body and storing it on the restorations record.
+**Effort:** S (human: ~1 day / CC: ~15 min)
+**Priority:** P2
+**Depends on:** Stable email flow for authenticated users (completed in restoration pipeline PR)
+
+---
+
+### kie.ai 4xx Error Discrimination
+**What:** In `/api/jobs/restore` and `/api/jobs/restore-hires`, distinguish permanent kie.ai errors (4xx: wrong API key, malformed request) from transient errors (5xx: kie.ai downtime). On permanent 4xx, return 200 so QStash stops retrying and immediately fire the failure path.
+**Why:** A misconfigured API key currently wastes 3 kie.ai requests (maxRetries) before the job dies. Post-launch, a bad deploy could drain API quota or delay failure detection by minutes.
+**Pros:** Faster failure detection; prevents wasted API calls on permanent errors.
+**Cons:** Requires kie.ai's status codes to be reliable and well-documented — may not be the case for an early-stage API.
+**Context:** Identified during /plan-eng-review (2026-03-20). Deferred because: (a) config errors are caught in staging before prod, (b) kie.ai 4xx behavior not yet fully documented. Revisit once the API is stable and we have real production error data.
+**Effort:** XS (human: ~1 hr / CC: ~5 min)
+**Priority:** P3
+**Depends on:** Stable kie.ai API with predictable status codes
+
+---
+
+### Orphaned Blob Cleanup Job
+**What:** A periodic job (cron or manual trigger) that lists Vercel Blob objects under `originals/` and cross-references them against the `restorations` table. Any blob with no corresponding DB record (or with a DB record at status="failed") older than 48 hours is deleted.
+**Why:** When `qstash.publishJSON()` fails after a blob upload, the original image file is uploaded to Vercel Blob but the restoration is marked "failed". Over time these orphaned files accumulate and cost storage money (small but nonzero).
+**Pros:** Keeps storage clean; prevents runaway costs at scale; blob storage cleanup is idempotent and safe.
+**Cons:** Requires Vercel Blob list() pagination across potentially many objects; need to be careful not to delete blobs for very recent restorations still in-flight.
+**Context:** Identified during /plan-eng-review (2026-03-20). The fix for QStash publish failure (upload route) correctly marks the restoration as "failed", but the blob file is still orphaned. Implement as a Next.js route handler protected by cron auth (`CRON_SECRET`), or as a Vercel cron job triggered daily. Cross-reference: `Blob.list({ prefix: "originals/" })` vs `db.select({ inputBlobUrl }).from(restorations)`.
+**Effort:** S (human: ~1 day / CC: ~15 min)
+**Priority:** P3
+**Depends on:** Stable core product in production; meaningful upload volume to justify the cleanup overhead
+
+---
+
 ### Developer API
 **What:** Public REST API allowing photography studios, print shops, and genealogy services to integrate photo restoration into their own products. Per-call or subscription pricing for API access.
 **Why:** B2B revenue channel with much higher LTV per customer than consumer. API customers bring their own distribution.
