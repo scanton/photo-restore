@@ -2,6 +2,32 @@
 
 All notable changes to PicRenew will be documented in this file.
 
+## [0.3.2.0] - 2026-03-20
+
+### Added
+- **AI restoration pipeline** — full async pipeline via QStash + kie.ai. Upload → `POST /api/jobs/restore` submits a 1K restoration task; kie.ai callback (`POST /api/webhooks/kie?phase=initial`) applies watermark, estimates era, and transitions status to `pending_payment`.
+- **Hi-res pipeline** — 2K/4K purchases enqueue `POST /api/jobs/restore-hires` via QStash; kie.ai callback (`phase=hires`) uploads the full-res output and marks the restoration `complete`.
+- **Failure handler** — `POST /api/jobs/restore-failed` receives QStash failure callbacks after all retries are exhausted and sets restoration status to `failed`, ending the spinner.
+- **Transactional email** — `sendRestorationReadyEmail()` sends a branded "Your photo is ready" email via Resend after a restoration completes. No-op for anonymous users and when `RESEND_API_KEY` is not set.
+- **Era estimation** — `lib/openrouter.ts` calls OpenRouter (Gemini Flash 1.5) to estimate the decade a photo was taken. Result displayed on the restore page. Best-effort: any failure returns null silently.
+- **QStash client** — shared `lib/qstash.ts` with `verifyQStash()` helper and `buildFailureCallback()` utility. Raw body is read before signature verification to avoid consuming the stream.
+- **kie.ai client** — `lib/kie.ts` wraps `POST /api/v1/jobs/createTask` and `buildKieCallbackUrl()`. Throws on any non-2xx so the job route returns 500 and QStash retries.
+- **Preset prompts** — `lib/presets.ts` extended with `prompt` field for each preset (standard, colorize, enhance, portrait).
+- **161 tests** across 13 test files covering all new routes and library modules.
+
+### Changed
+- **Upload route** — now validates preset slug before any expensive operations; publishes QStash job with 3 retries + failure callback after blob upload; marks restoration `failed` if publish fails (prevents orphaned "analyzing" records).
+- **Purchase route** — 1K purchases: `status → complete` + email immediately (preview IS the full 1K output). 2K/4K purchases: `status → processing` + QStash `restore-hires` job; credits refunded if QStash publish fails.
+
+### Fixed
+- `restore-hires` idempotency: added `status = 'processing'` guard to prevent duplicate kie.ai submissions if QStash delivers after the job already completed.
+- `restore-hires` retry safety: `createKieTask` failures now reset `kieAiJobId` to `null` and re-throw so QStash can retry cleanly (previously: `kieAiJobId` stayed `'hires-pending'` and all retries silently skipped).
+- `restore-hires` NULL idempotency: `WHERE` clause now includes `OR kieAiJobId IS NULL` to handle retry-after-failure-reset (SQL `NULL != 'hires-pending'` evaluates to `NULL`, not `TRUE`).
+- `restore-failed` terminal state guard: protects `complete` and `refunded` restorations in addition to `failed` — a stale failure callback can no longer clobber a completed restoration.
+- Webhook auth uses `crypto.timingSafeEqual` to prevent timing attacks on the shared secret comparison.
+- Webhook hires phase: idempotency check (`status === 'complete'`) now runs before image download, not after.
+- Email module: `Resend` is instantiated inside the function body (not at module level) to prevent throws in test environments missing `RESEND_API_KEY`.
+
 ## [0.3.1.0] - 2026-03-19
 
 ### Added
