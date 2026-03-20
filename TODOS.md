@@ -64,6 +64,13 @@
 
 ## Completed
 
+### QA Fixes — Auth Route, Error States, UUID Validation (2026-03-20)
+**Completed:** /qa run on feat/scaffold (2026-03-20)
+
+Four bugs found and fixed: (1) missing NextAuth API route caused all auth to fail silently; (2) restore page heading stuck on "Loading…" when an error occurred; (3) upload API returned 500 instead of 400 for malformed requests; (4) status/purchase routes returned 500 on non-UUID IDs. Health score 72 → 87. All 93 tests passing.
+
+---
+
 ### Stripe Checkout + Credit Purchase Flow (v0.3.0.0 — 2026-03-19)
 **Completed:** v0.3.0.0 (2026-03-19)
 
