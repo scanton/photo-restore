@@ -1,19 +1,5 @@
 # TODOS
 
-## P0 — Required for v1 Revenue
-
-### Stripe Checkout Session Creation (`POST /api/checkout/create`)
-**What:** API endpoint that creates a Stripe Checkout Session for a given restoration. The restore page `handlePurchase` button already calls this endpoint — it just doesn't exist yet.
-**Why:** Without this, users can see their watermarked preview but have no way to pay. Zero revenue is possible until this is wired.
-**Pros:** Unblocks the entire payment funnel; Stripe Checkout handles card collection, 3DS, and receipts.
-**Cons:** Requires Stripe product/price setup and correct `metadata.credits` on the session so the webhook can award the right amount.
-**Context:** Surfaced during eng review of scaffold (2026-03-19). The restore page (`src/app/(app)/restore/[id]/page.tsx`) already has a `handlePurchase` handler that POSTs to `/api/checkout/create` with `{ restorationId }`. The Stripe webhook (`src/app/api/webhooks/stripe/route.ts`) already handles `checkout.session.completed` and awards credits. The missing piece is the session creation endpoint itself. Also needs a `/billing` page and Customer Portal link.
-**Effort:** S (human: ~1 day / CC: ~10 min)
-**Priority:** P0
-**Depends on:** Stripe account configured, price IDs set in env vars
-
----
-
 ## P2 — Post-Launch
 
 ### Physical Print Ordering Integration
@@ -78,4 +64,7 @@
 
 ## Completed
 
-_No deferred items completed yet._
+### Stripe Checkout + Credit Purchase Flow (v0.3.0.0 — 2026-03-19)
+**Completed:** v0.3.0.0 (2026-03-19)
+
+`POST /api/checkout/create`, `POST /api/restore/[id]/purchase`, `invoice.payment_succeeded` webhook handler, `src/lib/products.ts` product registry, and `resolution` column on `restorations`. 93 tests passing. The full payment funnel — from "Use Credits" / "Buy Credits" CTAs through Stripe Checkout to monthly subscription renewal — is now wired.
