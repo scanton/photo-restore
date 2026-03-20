@@ -236,7 +236,7 @@ export default function RestorePage() {
                 color: "#1C1410",
               }}
             >
-              {status ? STATUS_LABELS[status] : "Loading…"}
+              {status ? STATUS_LABELS[status] : fetchError ? "Restoration not found." : "Loading…"}
             </h1>
           </div>
 
