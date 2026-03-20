@@ -82,7 +82,7 @@ npm run dev
 
 ```bash
 # Run tests
-npm run test           # Vitest unit/integration (37 tests)
+npm run test           # Vitest unit/integration (93 tests)
 ```
 
 ---
@@ -104,7 +104,7 @@ Available skills: `/browse`, `/plan-ceo-review`, `/plan-eng-review`, `/design-co
 | File | What it covers |
 |---|---|
 | [`DESIGN.md`](DESIGN.md) | Full design system — fonts, colors, spacing, motion, layout |
-| [`TODOS.md`](TODOS.md) | Roadmap — P0: Stripe checkout endpoint (required for revenue); P2/P3: print ordering, genealogy integrations, API, family album |
+| [`TODOS.md`](TODOS.md) | Roadmap — P2/P3 post-launch items: print ordering, genealogy integrations, referral program, API, family album |
 | [`CHANGELOG.md`](CHANGELOG.md) | Release history |
 | [`docs/designs/photo-restore-v1.md`](docs/designs/photo-restore-v1.md) | CEO-reviewed v1 product plan and scope decisions |
 
@@ -112,6 +112,6 @@ Available skills: `/browse`, `/plan-ceo-review`, `/plan-eng-review`, `/design-co
 
 ## Status
 
-**v0.2.0.0 — Scaffold shipped. Ready for feature implementation.**
+**v0.3.1.0 — Payment funnel live. Ready for real users.**
 
-Full Next.js 16 scaffold live: auth, DB schema, credit system, upload + restore flow, Stripe webhook, 37 tests passing. Next: wire the Stripe Checkout endpoint to enable real payments (see P0 in TODOS.md).
+Full Stripe flow end-to-end: `/billing` page, resolution picker (1k/2k/4k), Customer Portal, subscription renewal credits, and QA hardening. 93 tests passing. Next: merge to `main` and start acquiring users.
