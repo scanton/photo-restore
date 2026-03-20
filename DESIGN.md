@@ -1,4 +1,4 @@
-# Design System — Photo Restore
+# Design System — PicRenew
 
 ## Product Context
 - **What this is:** A commercial web app where users upload old, faded, or damaged photographs and receive AI-restored results. Includes a marketing landing page, single-photo restore flow, batch processing, gift-a-restoration flow, credit pack/subscription billing, and an admin panel.
