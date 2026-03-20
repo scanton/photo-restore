@@ -3,10 +3,12 @@ import type { NextRequest } from "next/server";
 
 // ─── Hoisted mocks ────────────────────────────────────────────────────────────
 
-const { mockPut, mockReturning, mockAuth } = vi.hoisted(() => ({
+const { mockPut, mockReturning, mockAuth, mockPublishJSON, mockDbUpdate } = vi.hoisted(() => ({
   mockPut: vi.fn().mockResolvedValue({ url: "https://blob.vercel.com/test.jpg" }),
   mockReturning: vi.fn().mockResolvedValue([{ id: "restoration-uuid" }]),
   mockAuth: vi.fn().mockResolvedValue(null),
+  mockPublishJSON: vi.fn().mockResolvedValue({}),
+  mockDbUpdate: vi.fn(),
 }));
 
 vi.mock("@vercel/blob", () => ({ put: mockPut }));
@@ -16,11 +18,21 @@ vi.mock("@/lib/db", () => ({
     insert: vi.fn().mockReturnValue({
       values: vi.fn().mockReturnValue({ returning: mockReturning }),
     }),
+    update: vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: mockDbUpdate,
+      }),
+    }),
   },
   restorations: { id: "id" },
 }));
 
 vi.mock("@/lib/auth", () => ({ auth: mockAuth }));
+
+vi.mock("@/lib/qstash", () => ({
+  qstash: { publishJSON: mockPublishJSON },
+  buildFailureCallback: vi.fn().mockReturnValue(undefined),
+}));
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -75,6 +87,7 @@ describe("POST /api/upload", () => {
     // Re-establish mocks cleared by clearAllMocks
     mockPut.mockResolvedValue({ url: "https://blob.vercel.com/test.jpg" });
     mockReturning.mockResolvedValue([{ id: "restoration-uuid" }]);
+    mockPublishJSON.mockResolvedValue({});
     mockAuth.mockResolvedValue(null);
     const { db } = await import("@/lib/db");
     (db.insert as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -113,6 +126,17 @@ describe("POST /api/upload", () => {
     expect(res.status).toBe(400);
     const body = await res.json() as { error: string };
     expect(body.error).toMatch(/20 mb/i);
+  });
+
+  it("returns 400 for an unknown preset slug", async () => {
+    const req = buildMockRequest(
+      { name: "photo.jpg", type: "image/jpeg", buffer: makeJpegBuffer() },
+      "nonexistent-preset"
+    );
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toMatch(/unknown preset/i);
   });
 
   it("returns 400 when file has image MIME but wrong magic bytes (MIME spoofing)", async () => {
@@ -159,6 +183,21 @@ describe("POST /api/upload", () => {
     await POST(req);
     expect(mockPut).toHaveBeenCalledOnce();
     expect(mockReturning).toHaveBeenCalledOnce();
+  });
+
+  it("marks restoration as failed when QStash publish throws", async () => {
+    mockPublishJSON.mockRejectedValue(new Error("QStash unavailable"));
+    const req = buildMockRequest({
+      name: "photo.jpg",
+      type: "image/jpeg",
+      buffer: makeJpegBuffer(),
+    });
+
+    const res = await POST(req);
+    // QStash failure propagates to outer catch → 500
+    expect(res.status).toBe(500);
+    // DB update should have been called to mark as failed (not stuck at "analyzing")
+    expect(mockDbUpdate).toHaveBeenCalledOnce();
   });
 
   it("creates restoration with null userId for anonymous uploads", async () => {
