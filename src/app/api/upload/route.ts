@@ -10,7 +10,7 @@ import { randomUUID } from "crypto";
 const MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
 
 /** Set of valid preset slugs for O(1) validation */
-const VALID_PRESET_SLUGS = new Set(PRESETS.map((p) => p.slug));
+const VALID_PRESET_SLUGS = new Set<string>(PRESETS.map((p) => p.slug));
 
 /**
  * Validates image file headers (magic bytes) to prevent MIME-spoofing.
