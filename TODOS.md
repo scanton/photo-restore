@@ -78,4 +78,4 @@
 
 ## Completed
 
-_No items completed yet — implementation not started._
+_No deferred items completed yet._

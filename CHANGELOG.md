@@ -27,7 +27,7 @@ All notable changes to PicRenew will be documented in this file.
 - Upload route MIME spoofing: magic byte validation added (JPEG/PNG/GIF/WebP) alongside client-controlled MIME type check
 - Restore page polling stale closure: replaced `data`-in-deps pattern with `useRef` for status tracking; removed `eslint-disable` comment
 
-### Changed
+### For contributors
 - `src/lib/db/schema.ts` is now pure table/enum definitions; DB connection (`Pool`, `drizzle()`) moved to `src/lib/db/index.ts`
 - `credit_ledger` table now has an index on `user_id` for balance sum query performance
 
