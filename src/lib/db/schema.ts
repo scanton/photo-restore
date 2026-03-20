@@ -8,9 +8,8 @@ import {
   boolean,
   timestamp,
   json,
+  index,
 } from "drizzle-orm/pg-core";
-import { drizzle } from "drizzle-orm/neon-serverless";
-import { Pool } from "@neondatabase/serverless";
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
@@ -95,19 +94,26 @@ export const verificationTokens = pgTable("verification_tokens", {
   expires: timestamp("expires").notNull(),
 });
 
-export const creditLedger = pgTable("credit_ledger", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  amount: integer("amount").notNull(),
-  type: creditTypeEnum("type").notNull(),
-  description: text("description"),
-  idempotencyKey: text("idempotency_key").unique(),
-  stripePaymentIntentId: text("stripe_payment_intent_id"),
-  restorationId: uuid("restoration_id"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+export const creditLedger = pgTable(
+  "credit_ledger",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    amount: integer("amount").notNull(),
+    type: creditTypeEnum("type").notNull(),
+    description: text("description"),
+    idempotencyKey: text("idempotency_key").unique(),
+    stripePaymentIntentId: text("stripe_payment_intent_id"),
+    restorationId: uuid("restoration_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    // Index for balance sum queries — getBalance() scans this column on every credit check
+    userIdIdx: index("credit_ledger_user_id_idx").on(table.userId),
+  })
+);
 
 export const restorations = pgTable("restorations", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -183,8 +189,3 @@ export const presets = pgTable("presets", {
   active: boolean("active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
-
-// ─── DB Instance ─────────────────────────────────────────────────────────────
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
-export const db = drizzle(pool);
