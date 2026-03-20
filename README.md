@@ -29,7 +29,7 @@ Built for the person at 45 dealing with a box of their parents' photos. Not a te
 | Payments | Stripe Checkout + Customer Portal |
 | Restoration AI | kie.ai nano-banana-2 |
 | Era estimation | OpenRouter vision model |
-| Async queue | Upstash QStash (batch jobs) |
+| Async queue | Upstash QStash (restoration jobs) |
 | Email | Resend + React Email |
 | Tests | Vitest (unit/integration) + Playwright (E2E) |
 
@@ -40,7 +40,7 @@ Built for the person at 45 dealing with a box of their parents' photos. Not a te
 - **Anonymous upload, auth at purchase** — users see a watermarked preview without signing in; Google OAuth is required only at checkout. Maximizes top-of-funnel.
 - **Watermark is burned in server-side** — never a CSS overlay. The watermarked preview is a separate image file.
 - **Append-only credit ledger** — credits are never mutated, only appended. Every debit, refund, and award is a separate row with an idempotency key.
-- **QStash for batch** — each photo in a batch becomes an independent async job, avoiding Vercel serverless timeouts.
+- **QStash for async restoration** — each upload becomes an independent async job (restore → hires), avoiding Vercel serverless timeouts. At-least-once delivery with idempotency guards and a failure callback.
 - **30-day retention** — restored images are auto-deleted after 30 days; users can re-download within the window.
 
 Full architecture details in [`docs/designs/photo-restore-v1.md`](docs/designs/photo-restore-v1.md).
@@ -82,7 +82,7 @@ npm run dev
 
 ```bash
 # Run tests
-npm run test           # Vitest unit/integration (93 tests)
+npm run test           # Vitest unit/integration (161 tests)
 ```
 
 ---
@@ -112,6 +112,6 @@ Available skills: `/browse`, `/plan-ceo-review`, `/plan-eng-review`, `/design-co
 
 ## Status
 
-**v0.3.1.0 — Payment funnel live. Ready for real users.**
+**v0.3.2.0 — Full AI restoration pipeline live.**
 
-Full Stripe flow end-to-end: `/billing` page, resolution picker (1k/2k/4k), Customer Portal, subscription renewal credits, and QA hardening. 93 tests passing. Next: merge to `main` and start acquiring users.
+Async pipeline end-to-end: upload → QStash job → kie.ai restoration → watermarked preview → purchase → full-res delivery via kie.ai + Resend email. Includes era estimation (OpenRouter), 2K/4K hi-res support, and a complete failure-handling path. 161 tests passing. Ready for real users.
