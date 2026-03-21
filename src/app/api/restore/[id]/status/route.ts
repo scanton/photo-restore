@@ -50,6 +50,9 @@ export async function GET(
       eraEstimate: restoration.eraEstimate,
       eraConfidence: restoration.eraConfidence,
       creditsCharged: restoration.creditsCharged,
+      guestPurchased: restoration.guestPurchased,
+      resolution: restoration.resolution,
+      presetId: restoration.presetId,
     });
   } catch (err) {
     console.error("[GET /api/restore/[id]/status]", err);
