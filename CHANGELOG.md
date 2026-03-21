@@ -2,6 +2,29 @@
 
 All notable changes to PicRenew will be documented in this file.
 
+## [0.3.4.0] - 2026-03-21
+
+### Added
+- **Auth-first upload flow** — photo upload now requires a signed-in session; unauthenticated API calls receive a JSON 401 response
+- **Shared Nav component** (`src/components/layout/Nav.tsx`) — top navigation bar used across all pages; shows session state, credit balance pill (normal / low / zero color states), sign-in/sign-out, and account links
+- **UploadSection client component** — extracted upload state machine from the home page into a dedicated `"use client"` component so the home page can be a server component
+- **AuthPromptModal** — slide-up modal triggered by `?authPrompt=true` search param; prompts unauthenticated users to sign in with Google before uploading; dismisses via backdrop click or Esc
+- **Home page film strip** — unauthenticated users see a hero section and a horizontal-scrolling before/after demo using 4 `BeforeAfterSlider` pairs with era labels
+- **Account/profile page** (`/account`) — sidebar with avatar, name, email, credit balance, and nav links; main area shows restoration history with status-aware rows
+- **RestorationHistory server component** — async DB query wrapped in `<Suspense>` with animated skeleton fallback; extracted to its own file for independent mocking in tests
+- **RestorationHistoryRow component** — 5-state row: complete/download, complete/expired, failed, in-progress (spinner), and continue; includes re-restore and try-again links
+- **Signup bonus on first sign-in** — `events.signIn` handler awards 2 free restoration credits via idempotent `awardCredits()` call; duplicate sign-ins are silently no-ops
+- **Middleware protection** for `/restore/*` and `/account/*` — unauthenticated requests redirect to `/?authPrompt=true` with the auth prompt modal
+
+### Changed
+- **Home page** converted from `"use client"` to an async server component; auth state and credit balance are now read server-side and passed to child components
+- **Billing page** made public (no auth redirect) — unauthenticated users see a sign-in prompt banner instead of being bounced to `/api/auth/signin` (which was triggering Chrome's Safe Browsing filter)
+- **BillingClient** now accepts `session` and `creditBalance` props from the server page instead of fetching them client-side on mount; uses shared `<Nav>` component
+- **Button component** extended with `asLink` variant that renders as a Next.js `<Link>` (for use in server components where `onClick` handlers are not permitted)
+
+### Fixed
+- Removed auth gate on billing page that caused Chrome Safe Browsing false-positive by redirecting through the raw OAuth endpoint
+
 ## [0.3.3.0] - 2026-03-20
 
 ### Security
