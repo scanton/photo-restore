@@ -26,6 +26,7 @@ export const creditTypeEnum = pgEnum("credit_type", [
 export const resolutionEnum = pgEnum("resolution", ["1k", "2k", "4k"]);
 
 export const restorationStatusEnum = pgEnum("restoration_status", [
+  "ready",
   "analyzing",
   "watermarking",
   "pending_payment",
@@ -121,7 +122,7 @@ export const restorations = pgTable("restorations", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
   presetId: text("preset_id").notNull(),
-  status: restorationStatusEnum("status").default("analyzing").notNull(),
+  status: restorationStatusEnum("status").default("ready").notNull(),
   inputBlobUrl: text("input_blob_url"),
   outputBlobUrl: text("output_blob_url"),
   watermarkedBlobUrl: text("watermarked_blob_url"),
@@ -131,6 +132,12 @@ export const restorations = pgTable("restorations", {
   idempotencyKey: text("idempotency_key").unique(),
   resolution: resolutionEnum("resolution").default("1k").notNull(),
   creditsCharged: integer("credits_charged").default(1).notNull(),
+  // Sprint 4: restoration options
+  removeFrame: boolean("remove_frame").notNull().default(false),
+  colorize: boolean("colorize").notNull().default(false),
+  // Sprint 4: $0.99 guest download
+  guestPurchased: boolean("guest_purchased").notNull().default(false),
+  guestEmail: text("guest_email"),
   batchJobId: uuid("batch_job_id"),
   expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

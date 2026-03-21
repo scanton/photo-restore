@@ -150,8 +150,8 @@ describe("products.ts", () => {
   // ── VALID_PRICE_IDS ───────────────────────────────────────────────────────
 
   describe("VALID_PRICE_IDS", () => {
-    it("contains exactly 7 price IDs (3 packs + 4 subscriptions)", () => {
-      expect(VALID_PRICE_IDS.size).toBe(7);
+    it("contains exactly 8 price IDs (3 packs + 4 subscriptions + 1 single download)", () => {
+      expect(VALID_PRICE_IDS.size).toBe(8);
     });
 
     it("all IDs are unique (no duplicates)", () => {

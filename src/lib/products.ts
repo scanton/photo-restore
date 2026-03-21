@@ -69,14 +69,26 @@ export const SUBSCRIPTIONS = [
   },
 ] as const;
 
+// ─── Single Download ──────────────────────────────────────────────────────────
+// $0.99 one-time download for a single 1K restoration. No account required.
+// Guest checkout only — does not add credits to any account.
+export const SINGLE_DOWNLOAD = {
+  priceId: "price_1TDHDDE49NyEBPDXWzLxpnda",
+  productId: "prod_UBeWnDXwOOZmW5",
+  name: "Single Download",
+  price: 0.99,
+  type: "single_download" as const,
+} as const;
+
 export type CreditPack = (typeof CREDIT_PACKS)[number];
 export type Subscription = (typeof SUBSCRIPTIONS)[number];
-export type Product = CreditPack | Subscription;
+export type SingleDownload = typeof SINGLE_DOWNLOAD;
+export type Product = CreditPack | Subscription | SingleDownload;
 
 /** Look up a product by Stripe price ID. Returns null for unknown IDs. */
 export function getProductByPriceId(priceId: string): Product | null {
   return (
-    ([...CREDIT_PACKS, ...SUBSCRIPTIONS] as Product[]).find(
+    ([...CREDIT_PACKS, ...SUBSCRIPTIONS, SINGLE_DOWNLOAD] as Product[]).find(
       (p) => p.priceId === priceId
     ) ?? null
   );
@@ -92,8 +104,14 @@ export function isSubscription(product: Product): product is Subscription {
   return "interval" in product;
 }
 
+/** Type guard: is this product a single-download purchase? */
+export function isSingleDownload(product: Product): product is SingleDownload {
+  return "type" in product && product.type === "single_download";
+}
+
 /** All valid Stripe price IDs — used to validate incoming priceId params. */
 export const VALID_PRICE_IDS = new Set<string>([
   ...CREDIT_PACKS.map((p) => p.priceId),
   ...SUBSCRIPTIONS.map((p) => p.priceId),
+  SINGLE_DOWNLOAD.priceId,
 ]);
