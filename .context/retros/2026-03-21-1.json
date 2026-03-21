@@ -1,0 +1,66 @@
+{
+  "date": "2026-03-21",
+  "window": "7d",
+  "metrics": {
+    "commits": 74,
+    "contributors": 1,
+    "prs_merged": 8,
+    "insertions": 11000,
+    "deletions": 2200,
+    "net_loc": 8800,
+    "app_loc_insertions": 9760,
+    "test_loc": 3200,
+    "test_ratio": 0.35,
+    "active_days": 4,
+    "sessions": 13,
+    "deep_sessions": 2,
+    "medium_sessions": 4,
+    "micro_sessions": 7,
+    "avg_session_minutes": 23,
+    "loc_per_session_hour": 2000,
+    "feat_pct": 0.32,
+    "fix_pct": 0.22,
+    "chore_pct": 0.16,
+    "docs_pct": 0.19,
+    "test_pct": 0.05,
+    "refactor_pct": 0.01,
+    "peak_hour": 19,
+    "ai_assisted_commits": 55
+  },
+  "authors": {
+    "scanton": {
+      "commits": 74,
+      "insertions": 9760,
+      "deletions": 2200,
+      "test_ratio": 0.35,
+      "top_area": "src/app/api/"
+    }
+  },
+  "version_range": ["0.1.0.0", "0.3.4.0"],
+  "streak_days": 4,
+  "tweetable": "Week of Mar 14: 74 commits (1 contributor), 9.7k app LOC, 35% tests, 8 PRs, v0.1.0.0→v0.3.4.0 | Streak: 4d",
+  "skill_usage": {
+    "ship": 6,
+    "plan-eng-review": 7,
+    "document-release": 6,
+    "office-hours": 2,
+    "review": 2,
+    "qa": 1,
+    "retro": 1,
+    "design-consultation": 1
+  },
+  "test_health": {
+    "total_test_files": 17,
+    "tests_added_this_period": 163,
+    "regression_test_commits": 3,
+    "test_files_changed": 12
+  },
+  "backlog": {
+    "total_open": 12,
+    "p0_p1": 2,
+    "p2": 5,
+    "p3": 5,
+    "completed_this_period": 7,
+    "added_this_period": 3
+  }
+}

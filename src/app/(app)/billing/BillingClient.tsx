@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import { Nav } from "@/components/layout/Nav";
 import { CREDIT_PACKS, SUBSCRIPTIONS } from "@/lib/products";
+import type { Session } from "next-auth";
 
 type BillingInterval = "month" | "year";
 
@@ -26,14 +29,17 @@ const PACK_DESCRIPTIONS: Record<string, string> = {
   "price_1TCsKfE49NyEBPDXMuHGNQYu": "Best value per credit",
 };
 
-export default function BillingClient() {
-  const [balance, setBalance] = useState<number | null>(null);
-  const [interval, setInterval] = useState<BillingInterval>("year");
+interface BillingClientProps {
+  session: Session | null;
+  creditBalance: number | null;
+}
+
+export default function BillingClient({ session, creditBalance: initialBalance }: BillingClientProps) {
+  const [balance, setBalance] = useState<number | null>(initialBalance);
+  const [billingInterval, setBillingInterval] = useState<BillingInterval>("year");
   const [loadingPriceId, setLoadingPriceId] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
-  const [checkoutStatus, setCheckoutStatus] = useState<
-    "success" | "cancelled" | null
-  >(null);
+  const [checkoutStatus, setCheckoutStatus] = useState<"success" | "cancelled" | null>(null);
 
   // Detect checkout return status from query param
   useEffect(() => {
@@ -41,19 +47,26 @@ export default function BillingClient() {
     const status = params.get("checkout");
     if (status === "success" || status === "cancelled") {
       setCheckoutStatus(status);
-      // Clean URL without reload
       window.history.replaceState({}, "", "/billing");
     }
   }, []);
 
+  // Re-fetch balance after successful checkout return
   useEffect(() => {
-    void fetch("/api/credits/balance")
-      .then((r) => r.json())
-      .then((data: { balance?: number }) => setBalance(data.balance ?? 0))
-      .catch(() => setBalance(0));
-  }, [checkoutStatus]); // re-fetch balance after successful checkout return
+    if (checkoutStatus === "success" && session?.user) {
+      void fetch("/api/credits/balance")
+        .then((r) => r.json())
+        .then((data: { balance?: number }) => setBalance(data.balance ?? 0))
+        .catch(() => {});
+    }
+  }, [checkoutStatus, session?.user]);
 
   const handleBuy = async (priceId: string) => {
+    if (!session?.user) {
+      // Unauthenticated — send them to sign in, then return to billing
+      void signIn("google", { callbackUrl: "/billing" });
+      return;
+    }
     setLoadingPriceId(priceId);
     try {
       const res = await fetch("/api/checkout/create", {
@@ -91,35 +104,11 @@ export default function BillingClient() {
     }
   };
 
-  const filteredSubs = SUBSCRIPTIONS.filter((s) => s.interval === interval);
+  const filteredSubs = SUBSCRIPTIONS.filter((s) => s.interval === billingInterval);
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#FAF7F2" }}>
-      {/* Nav */}
-      <header
-        className="w-full border-b"
-        style={{ borderColor: "#D9CDB8" }}
-      >
-        <div className="mx-auto max-w-[1140px] px-6 h-16 flex items-center justify-between">
-          <a
-            href="/"
-            className="text-xl font-bold"
-            style={{
-              fontFamily: "var(--font-fraunces), Georgia, serif",
-              color: "#1C1410",
-            }}
-          >
-            PicRenew
-          </a>
-          <a
-            href="/restore"
-            className="text-sm font-medium"
-            style={{ color: "#6B5D52" }}
-          >
-            ← Back
-          </a>
-        </div>
-      </header>
+      <Nav session={session} creditBalance={balance} />
 
       <main className="mx-auto max-w-[1140px] px-6 py-12">
         {/* Checkout return banners */}
@@ -143,6 +132,35 @@ export default function BillingClient() {
             style={{ backgroundColor: "#F2EDE5", color: "#6B5D52" }}
           >
             <span className="text-sm">Checkout cancelled — no charge was made.</span>
+          </div>
+        )}
+
+        {/* Unauthenticated sign-in prompt */}
+        {!session?.user && (
+          <div
+            className="mb-10 px-6 py-5 rounded-[12px] border flex flex-col sm:flex-row items-start sm:items-center gap-4"
+            style={{ backgroundColor: "#F2EDE5", borderColor: "#D9CDB8" }}
+          >
+            <div className="flex-1">
+              <p
+                className="text-base font-semibold mb-1"
+                style={{ fontFamily: "var(--font-fraunces), Georgia, serif", color: "#1C1410" }}
+              >
+                Sign in to purchase
+              </p>
+              <p className="text-sm" style={{ color: "#6B5D52" }}>
+                Create a free account to buy credits and restore your family photos.
+              </p>
+            </div>
+            <button
+              onClick={() => void signIn("google", { callbackUrl: "/billing" })}
+              className="shrink-0 px-5 py-2.5 rounded-[8px] text-sm font-semibold transition-colors"
+              style={{ backgroundColor: "#B5622A", color: "#FAF7F2" }}
+              onMouseEnter={(e) => ((e.target as HTMLElement).style.backgroundColor = "#D4874E")}
+              onMouseLeave={(e) => ((e.target as HTMLElement).style.backgroundColor = "#B5622A")}
+            >
+              Sign in with Google
+            </button>
           </div>
         )}
 
@@ -195,12 +213,11 @@ export default function BillingClient() {
               {(["month", "year"] as const).map((iv) => (
                 <button
                   key={iv}
-                  onClick={() => setInterval(iv)}
+                  onClick={() => setBillingInterval(iv)}
                   className="px-4 py-1.5 text-sm font-medium transition-colors"
                   style={{
-                    backgroundColor:
-                      interval === iv ? "#B5622A" : "transparent",
-                    color: interval === iv ? "#FAF7F2" : "#6B5D52",
+                    backgroundColor: billingInterval === iv ? "#B5622A" : "transparent",
+                    color: billingInterval === iv ? "#FAF7F2" : "#6B5D52",
                   }}
                 >
                   {iv === "month" ? "Monthly" : "Annual −10%"}
@@ -221,10 +238,7 @@ export default function BillingClient() {
                 <div
                   key={sub.priceId}
                   className="rounded-[16px] p-6 border flex flex-col"
-                  style={{
-                    backgroundColor: "#F2EDE5",
-                    borderColor: "#D9CDB8",
-                  }}
+                  style={{ backgroundColor: "#F2EDE5", borderColor: "#D9CDB8" }}
                 >
                   {icon && (
                     <img
@@ -234,10 +248,7 @@ export default function BillingClient() {
                       style={{ width: 40, height: 40, objectFit: "contain" }}
                     />
                   )}
-                  <p
-                    className="text-base font-semibold mb-1"
-                    style={{ color: "#1C1410" }}
-                  >
+                  <p className="text-base font-semibold mb-1" style={{ color: "#1C1410" }}>
                     {sub.name.replace(/ \(.*\)$/, "")}
                   </p>
                   <div className="flex items-baseline gap-2 mb-1">
@@ -250,15 +261,10 @@ export default function BillingClient() {
                     >
                       ${monthlyEquiv}
                     </p>
-                    <span className="text-sm" style={{ color: "#8A7A6E" }}>
-                      / mo
-                    </span>
+                    <span className="text-sm" style={{ color: "#8A7A6E" }}>/ mo</span>
                   </div>
                   {isAnnual && (
-                    <p
-                      className="text-xs mb-1"
-                      style={{ color: "#8A7A6E" }}
-                    >
+                    <p className="text-xs mb-1" style={{ color: "#8A7A6E" }}>
                       Billed ${sub.price.toFixed(2)}/year
                     </p>
                   )}
@@ -306,10 +312,7 @@ export default function BillingClient() {
                 <div
                   key={pack.priceId}
                   className="rounded-[16px] p-6 border flex flex-col"
-                  style={{
-                    backgroundColor: "#F2EDE5",
-                    borderColor: "#D9CDB8",
-                  }}
+                  style={{ backgroundColor: "#F2EDE5", borderColor: "#D9CDB8" }}
                 >
                   {icon && (
                     <img
@@ -319,10 +322,7 @@ export default function BillingClient() {
                       style={{ width: 40, height: 40, objectFit: "contain" }}
                     />
                   )}
-                  <p
-                    className="text-base font-semibold mb-1"
-                    style={{ color: "#1C1410" }}
-                  >
+                  <p className="text-base font-semibold mb-1" style={{ color: "#1C1410" }}>
                     {pack.name}
                   </p>
                   {description && (
@@ -370,32 +370,31 @@ export default function BillingClient() {
         </section>
 
         {/* ── Manage subscription ──────────────────────────────── */}
-        <section>
-          <div
-            className="rounded-[16px] p-6 border flex items-center justify-between gap-6"
-            style={{ backgroundColor: "#F2EDE5", borderColor: "#D9CDB8" }}
-          >
-            <div>
-              <p
-                className="text-sm font-semibold mb-1"
-                style={{ color: "#1C1410" }}
-              >
-                Manage your subscription
-              </p>
-              <p className="text-sm" style={{ color: "#6B5D52" }}>
-                Update payment method, view invoices, or cancel your plan.
-              </p>
-            </div>
-            <Button
-              variant="secondary"
-              size="md"
-              loading={portalLoading}
-              onClick={() => void handlePortal()}
+        {session?.user && (
+          <section>
+            <div
+              className="rounded-[16px] p-6 border flex items-center justify-between gap-6"
+              style={{ backgroundColor: "#F2EDE5", borderColor: "#D9CDB8" }}
             >
-              Open billing portal
-            </Button>
-          </div>
-        </section>
+              <div>
+                <p className="text-sm font-semibold mb-1" style={{ color: "#1C1410" }}>
+                  Manage your subscription
+                </p>
+                <p className="text-sm" style={{ color: "#6B5D52" }}>
+                  Update payment method, view invoices, or cancel your plan.
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                size="md"
+                loading={portalLoading}
+                onClick={() => void handlePortal()}
+              >
+                Open billing portal
+              </Button>
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );

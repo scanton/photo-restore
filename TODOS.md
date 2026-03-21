@@ -76,6 +76,30 @@
 
 ## P2 — Post-Launch
 
+### Email Marketing / CRM Integration
+**What:** Sync new user email addresses from the `users` table to a marketing platform (Loops.so or HubSpot) for welcome emails, retention campaigns, and win-back flows.
+**Why:** Sprint 5 captures emails at sign-up (stored in DB). Without a CRM, acquired users have no lifecycle marketing — no welcome email, no nudge if they never restore a photo, no win-back if they churn.
+**Pros:** Turns email capture into a retention asset; welcome sequences convert curious sign-ups into paying customers.
+**Cons:** Platform selection requires evaluation (Loops.so vs HubSpot vs alternatives); requires a sync mechanism (webhook on `users.insert` or periodic DB export).
+**Context:** Explicitly deferred from Sprint 5 /office-hours (2026-03-21). Research Loops.so vs HubSpot vs other options. Emails are captured in `users.email` after Sprint 5's auth-first flow. Sync strategy: call the CRM API from the `events.signIn` handler (alongside `handleSignupBonus`) or batch-sync nightly from a cron job.
+**Effort:** S (human: ~1 day / CC: ~15 min)
+**Priority:** P2
+**Depends on:** Sprint 5 auth-first flow (users.email populated on sign-up)
+
+---
+
+### Subscriber Image Persistence
+**What:** Preserve restored images indefinitely for active subscribers, instead of applying the universal 30-day auto-delete. When a subscription renewal event fires, reset `expiresAt` on the user's active restorations (or set it to NULL for permanent retention).
+**Why:** Creates a meaningful incentive to maintain an active subscription: "Your restored photos are safe as long as you're subscribed." Increases LTV and reduces churn by tying image access to subscription status.
+**Pros:** Differentiates subscription tiers from one-time purchases; high emotional value per subscriber; technically straightforward.
+**Cons:** Increases Vercel Blob storage costs for long-term subscribers; requires careful handling of the Blob auto-delete lifecycle (Vercel Blob's 30-day TTL may need to be bypassed or reset).
+**Context:** Mentioned by user during /office-hours (2026-03-21). Current schema already has `expiresAt` on the `restorations` table. Implementation: on `invoice.payment_succeeded` for a subscription event, extend `expiresAt` by 30 days for all active restorations for that `userId`. Or set `expiresAt = NULL` for permanent retention and manage Blob lifecycle separately. Do NOT apply to one-time credit purchases — persistence is a subscriber benefit only.
+**Effort:** S (human: ~1 day / CC: ~15 min)
+**Priority:** P2
+**Depends on:** Stable subscription renewal webhook (already implemented in v0.3.0.0); Sprint 5 profile page (users need a place to see persistent images)
+
+---
+
 ### Guest Resolution Upgrade Path ($0.99 → 2K/4K Upsell)
 **What:** After a guest downloads their $0.99 1K restoration, give them a path to upgrade to 2K or 4K without losing their restoration. Flow: "Want higher resolution? Create an account → buy a credit pack → hi-res restoration fires for the same restorationId."
 **Why:** The $0.99 buyer is the warmest possible lead for a credit pack upgrade — they've already paid, they've already seen their result, and they care about this specific photo. This is the highest-intent upsell moment in the product.

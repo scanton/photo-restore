@@ -37,7 +37,7 @@ Built for the person at 45 dealing with a box of their parents' photos. Not a te
 
 ## Architecture Decisions
 
-- **Anonymous upload, auth at purchase** — users see a watermarked preview without signing in; Google OAuth is required only at checkout. Maximizes top-of-funnel.
+- **Auth-first upload** — Google OAuth sign-in is required before uploading a photo. New users receive 2 free credits on first sign-in via idempotent signup bonus. Unauthenticated visitors see the hero + demo film strip and an auth prompt modal when they click Restore.
 - **Watermark is burned in server-side** — never a CSS overlay. The watermarked preview is a separate image file.
 - **Append-only credit ledger** — credits are never mutated, only appended. Every debit, refund, and award is a separate row with an idempotency key.
 - **QStash for async restoration** — each upload becomes an independent async job (restore → hires), avoiding Vercel serverless timeouts. At-least-once delivery with idempotency guards and a failure callback.
@@ -112,6 +112,6 @@ Available skills: `/browse`, `/plan-ceo-review`, `/plan-eng-review`, `/design-co
 
 ## Status
 
-**v0.3.3.0 — Webhook security hardened and failure handling complete.**
+**v0.3.4.0 — Auth-first flow, account profile page, and signup bonus live.**
 
-Full HMAC-SHA256 webhook authentication (kie.ai canonical approach), replay attack prevention, stale callback detection, kie.ai failure callback handling (no more permanently stuck restorations), and inner code validation. 178 tests passing. Ready for real users.
+Sprint 5 complete: Google sign-in required before upload (2 free credits on first sign-in via idempotent signup bonus), shared Nav with credit balance pill, auth-conditional home page with before/after demo film strip, account profile page with 5-state restoration history, and middleware protection for `/restore/*` and `/account/*`. 251 tests passing. P1 next: fix credit purchase unauthorized error, fix blurry watermark preview.
