@@ -39,6 +39,31 @@ interface JobPayload {
   presetId: string;
 }
 
+/**
+ * Builds the restoration prompt from a base preset prompt plus toggle flags.
+ * Exported for unit testing.
+ *
+ * Truth table:
+ *   removeFrame=false, colorize=false → base prompt only
+ *   removeFrame=true,  colorize=false → base + remove-frame instruction
+ *   removeFrame=false, colorize=true  → base + colorize instruction
+ *   removeFrame=true,  colorize=true  → base + both instructions
+ */
+export function buildPrompt(
+  basePrompt: string,
+  removeFrame: boolean,
+  colorize: boolean
+): string {
+  const parts: string[] = [basePrompt];
+  if (removeFrame) {
+    parts.push("Remove any physical frame, border, or vignette from the photograph before restoring.");
+  }
+  if (colorize) {
+    parts.push("Add natural, period-accurate colorization to the photograph.");
+  }
+  return parts.join(" ");
+}
+
 export async function POST(req: NextRequest) {
   // 1. Verify QStash HMAC signature
   const result = await verifyQStash(req);
@@ -72,10 +97,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  // 3. Load the input image URL (needed for kie.ai request)
+  // 3. Load the restoration record — reads removeFrame/colorize from DB so QStash
+  //    retries always use the stored user selections, not stale payload values.
   const [restoration] = await db
     .select({
       inputBlobUrl: restorations.inputBlobUrl,
+      removeFrame: restorations.removeFrame,
+      colorize: restorations.colorize,
+      presetId: restorations.presetId,
     })
     .from(restorations)
     .where(eq(restorations.id, restorationId))
@@ -90,9 +119,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Restoration not found" }, { status: 404 });
   }
 
-  // 4. Resolve prompt from preset
-  const preset = PRESETS.find((p) => p.slug === presetId);
-  const prompt = preset?.prompt ?? "Restore this photograph to its original quality.";
+  // 4. Build prompt from preset + user-selected options (removeFrame, colorize)
+  const preset = PRESETS.find((p) => p.slug === (restoration.presetId ?? presetId));
+  const basePrompt = preset?.prompt ?? "Restore this photograph to its original quality.";
+  const prompt = buildPrompt(basePrompt, restoration.removeFrame, restoration.colorize);
 
   // 5. Submit task to kie.ai (async — result comes via /api/webhooks/kie?phase=initial)
   const callBackUrl = buildKieCallbackUrl(restorationId, "initial");
