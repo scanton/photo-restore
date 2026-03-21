@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { db, users, subscriptions } from "@/lib/db";
+import { db, users, subscriptions, restorations } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { awardCredits } from "@/lib/credits";
 
@@ -28,6 +28,11 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+        // Sprint 4: $0.99 single-download guest checkout — handle before credit-pack flow
+        if (session.metadata?.type === "single_download") {
+          await handleSingleDownloadCompleted(session);
+          break;
+        }
         await handleCheckoutCompleted(session);
         break;
       }
@@ -61,6 +66,42 @@ export async function POST(req: NextRequest) {
     console.error(`[Stripe webhook] Error handling ${event.type}:`, err);
     return NextResponse.json({ error: "Handler error." }, { status: 500 });
   }
+}
+
+/**
+ * Handles checkout.session.completed for the $0.99 Single Download product.
+ *
+ * Guards:
+ *   - payment_status !== "paid"  → skip silently (should never happen in checkout flow)
+ *   - metadata.restorationId missing → log error, skip
+ *
+ * On success: marks guestPurchased=true, stores guest email, sets status="complete".
+ * Does NOT call handleCheckoutCompleted — no credits are involved.
+ */
+async function handleSingleDownloadCompleted(session: Stripe.Checkout.Session) {
+  if (session.payment_status !== "paid") {
+    console.warn(
+      "[stripe webhook] single_download payment_status !== paid, skipping",
+      session.id
+    );
+    return;
+  }
+
+  const restorationId = session.metadata?.restorationId;
+  if (!restorationId) {
+    console.error(
+      "[stripe webhook] single_download missing restorationId in metadata, sessionId=",
+      session.id
+    );
+    return;
+  }
+
+  const guestEmail = session.customer_details?.email ?? null;
+
+  await db
+    .update(restorations)
+    .set({ guestPurchased: true, guestEmail, status: "complete" })
+    .where(eq(restorations.id, restorationId));
 }
 
 async function getUserIdByStripeCustomerId(
