@@ -96,12 +96,6 @@ export async function POST(req: NextRequest) {
 
   // 5. Submit task to kie.ai (async — result comes via /api/webhooks/kie?phase=initial)
   const callBackUrl = buildKieCallbackUrl(restorationId, "initial");
-  console.log("[jobs/restore] debug:", {
-    callBackUrl,
-    NEXTAUTH_URL: process.env.NEXTAUTH_URL,
-    imageUrl: restoration.inputBlobUrl,
-    restorationId,
-  });
 
   let taskId: string;
   try {
@@ -111,7 +105,6 @@ export async function POST(req: NextRequest) {
       resolution: "1K", // Always 1K for the preview watermarked image
       callBackUrl,
     }));
-    console.log("[jobs/restore] kie.ai task created:", taskId, "callBackUrl:", callBackUrl);
   } catch (err) {
     // Reset kieAiJobId so QStash can retry this job cleanly
     await db

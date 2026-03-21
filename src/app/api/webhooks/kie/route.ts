@@ -128,18 +128,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  console.log("[webhooks/kie] raw payload:", JSON.stringify(payload));
-  console.log("[webhooks/kie] headers:", {
-    timestamp: req.headers.get("x-webhook-timestamp"),
-    signature: req.headers.get("x-webhook-signature") ? "(present)" : "(missing)",
-    contentType: req.headers.get("content-type"),
-  });
-
   const data = payload.data as Record<string, unknown> | undefined;
   // kie.ai sends taskId as data.taskId (camelCase) — also handle data.task_id and top-level payload.taskId as fallbacks
   const taskId = (data?.taskId ?? data?.task_id ?? payload.taskId) as string | undefined;
   if (!taskId) {
-    console.log("[webhooks/kie] taskId missing — data keys:", Object.keys(data ?? {}), "payload keys:", Object.keys(payload));
     return NextResponse.json({ error: "Missing task_id in payload" }, { status: 400 });
   }
 
