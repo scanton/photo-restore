@@ -1,9 +1,10 @@
 /**
  * Home page — server component.
  *
- * Auth-conditional rendering:
- *   - Authenticated  → show UploadSection (upload tool)
- *   - Unauthenticated → show hero CTA + film strip demo
+ * Always renders the marketing layout (hero, film strip, how it works,
+ * colorize demo row) regardless of auth state. The upload tool lives at
+ * /studio. Auth state is fetched only to populate the Nav (Studio link +
+ * credit pill) and to suppress the auth modal for signed-in users.
  *
  * The ?authPrompt=true query param is set by middleware when an unauthenticated
  * user tries to access a protected route. When present, AuthPromptModal is shown.
@@ -11,9 +12,9 @@
 import { auth } from "@/lib/auth";
 import { getBalance } from "@/lib/credits";
 import { Nav } from "@/components/layout/Nav";
-import { UploadSection } from "@/components/UploadSection";
 import { AuthPromptModal } from "@/components/AuthPromptModal";
 import { BeforeAfterSlider } from "@/components/before-after-slider";
+import { ColorizeRow } from "@/components/home/ColorizeRow";
 import { Button } from "@/components/ui/button";
 
 // Demo film strip pairs — images are in /public/demo/
@@ -65,36 +66,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       <Nav session={session ?? null} creditBalance={balance} />
 
       <main className="flex-1">
-        {session?.user ? (
-          /* ── Authenticated: upload tool ─────────────────────────── */
-          <section className="mx-auto max-w-[1140px] px-6 pt-16 pb-20">
-            <div className="max-w-xl">
-              <p
-                className="text-xs font-semibold uppercase tracking-widest mb-4"
-                style={{ color: "#B5622A", letterSpacing: "0.12em" }}
-              >
-                AI Photo Restoration
-              </p>
-              <h1
-                className="text-4xl font-light mb-3"
-                style={{
-                  fontFamily: "var(--font-fraunces), Georgia, serif",
-                  color: "#1C1410",
-                  fontSize: "clamp(1.75rem, 4vw, 2.5rem)",
-                }}
-              >
-                Restore a photo
-              </h1>
-              <p className="text-base mb-8" style={{ color: "#6B5D52" }}>
-                Upload a faded, scratched, or damaged photograph and our AI will
-                return the detail, color, and life that time has taken away.
-              </p>
-              <UploadSection />
-            </div>
-          </section>
-        ) : (
-          /* ── Unauthenticated: hero + film strip ─────────────────── */
-          <>
+        {/* ── Marketing layout — always shown regardless of auth state ── */}
+        <>
             {/* Hero */}
             <section className="mx-auto max-w-[1140px] px-6 pt-24 pb-16 grid lg:grid-cols-2 gap-16 items-center">
               {/* LEFT: copy */}
@@ -380,8 +353,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 </div>
               </div>
             </section>
+
+            {/* Colorize demo row — renders when /public/colorize/ images are present */}
+            <ColorizeRow />
           </>
-        )}
       </main>
 
       {/* Footer */}

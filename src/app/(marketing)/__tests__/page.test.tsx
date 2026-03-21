@@ -32,9 +32,6 @@ vi.mock("@/components/layout/Nav", () => ({
     <nav data-testid="nav" data-authed={!!session} />
   ),
 }));
-vi.mock("@/components/UploadSection", () => ({
-  UploadSection: () => <div data-testid="upload-section" />,
-}));
 vi.mock("@/components/AuthPromptModal", () => ({
   AuthPromptModal: ({ showModal }: { showModal: boolean }) => (
     <div data-testid="auth-modal" data-show={showModal} />
@@ -42,6 +39,9 @@ vi.mock("@/components/AuthPromptModal", () => ({
 }));
 vi.mock("@/components/before-after-slider", () => ({
   BeforeAfterSlider: () => <div data-testid="before-after-slider" />,
+}));
+vi.mock("@/components/home/ColorizeRow", () => ({
+  ColorizeRow: () => <div data-testid="colorize-row" />,
 }));
 vi.mock("@/components/ui/button", () => ({
   Button: ({ children, href }: { children: React.ReactNode; href?: string }) => (
@@ -107,16 +107,16 @@ describe("HomePage", () => {
       });
     });
 
-    it("renders UploadSection", async () => {
-      await renderPage();
-      expect(screen.getByTestId("upload-section")).toBeInTheDocument();
-    });
-
-    it("does NOT render the hero headline", async () => {
+    it("also renders the hero headline (home page is always marketing)", async () => {
       await renderPage();
       expect(
-        screen.queryByText(/give your family photos the care they deserve/i)
-      ).toBeNull();
+        screen.getByText(/give your family photos the care they deserve/i)
+      ).toBeInTheDocument();
+    });
+
+    it("does NOT render UploadSection (that lives at /studio now)", async () => {
+      await renderPage();
+      expect(screen.queryByTestId("upload-section")).toBeNull();
     });
 
     it("does NOT show the auth modal even if authPrompt=true (user is signed in)", async () => {

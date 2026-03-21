@@ -66,10 +66,11 @@ export function Nav({ session, creditBalance }: NavProps) {
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-6" aria-label="Main navigation">
           <NavLink href="/billing">Pricing</NavLink>
-          <NavLink href="#how-it-works">How it works</NavLink>
+          <NavLink href="/#how-it-works">How it works</NavLink>
 
           {session?.user ? (
             <>
+              <NavLink href="/studio">Studio</NavLink>
               <NavLink href="/account">My Account</NavLink>
 
               {/* Credit balance pill */}
@@ -152,10 +153,11 @@ export function Nav({ session, creditBalance }: NavProps) {
           style={{ borderColor: "#EDE5D8", backgroundColor: "#FAF7F2" }}
         >
           <MobileNavLink href="/billing" onClick={() => setMenuOpen(false)}>Pricing</MobileNavLink>
-          <MobileNavLink href="#how-it-works" onClick={() => setMenuOpen(false)}>How it works</MobileNavLink>
+          <MobileNavLink href="/#how-it-works" onClick={() => setMenuOpen(false)}>How it works</MobileNavLink>
 
           {session?.user ? (
             <>
+              <MobileNavLink href="/studio" onClick={() => setMenuOpen(false)}>Studio</MobileNavLink>
               <MobileNavLink href="/account" onClick={() => setMenuOpen(false)}>My Account</MobileNavLink>
               {creditBalance !== null && creditBalance !== undefined && (
                 <div className="flex items-center gap-2">

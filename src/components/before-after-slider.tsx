@@ -9,6 +9,8 @@ interface BeforeAfterSliderProps {
   beforeAlt?: string;
   afterAlt?: string;
   className?: string;
+  /** Label on the after-side badge. Defaults to "Restored". */
+  afterLabel?: string;
 }
 
 export function BeforeAfterSlider({
@@ -17,6 +19,7 @@ export function BeforeAfterSlider({
   beforeAlt = "Before restoration",
   afterAlt = "After restoration",
   className,
+  afterLabel = "Restored",
 }: BeforeAfterSliderProps) {
   const [position, setPosition] = useState(50); // percentage 0–100
   const [isDragging, setIsDragging] = useState(false);
@@ -169,7 +172,7 @@ export function BeforeAfterSlider({
       </div>
       <div className="absolute bottom-3 right-3 pointer-events-none">
         <span className="px-2 py-1 rounded-[4px] text-xs font-semibold uppercase tracking-wider bg-[#B5622A] text-[#FAF7F2]">
-          Restored
+          {afterLabel}
         </span>
       </div>
     </div>

@@ -54,7 +54,33 @@ describe("Nav", () => {
     });
   });
 
+  describe("unauthenticated — nav link hrefs", () => {
+    it("How it works link uses /#how-it-works (not #how-it-works)", () => {
+      render(<Nav session={null} />);
+      const links = screen.getAllByRole("link", { name: /how it works/i });
+      expect(links.length).toBeGreaterThan(0);
+      links.forEach((link) => expect(link).toHaveAttribute("href", "/#how-it-works"));
+    });
+
+    it("does NOT show Studio link when unauthenticated", () => {
+      render(<Nav session={null} />);
+      expect(screen.queryByRole("link", { name: /^studio$/i })).toBeNull();
+    });
+  });
+
   describe("authenticated", () => {
+    it("shows Studio link", () => {
+      render(<Nav session={mockSession} />);
+      const links = screen.getAllByRole("link", { name: /^studio$/i });
+      expect(links.length).toBeGreaterThan(0);
+    });
+
+    it("Studio link points to /studio", () => {
+      render(<Nav session={mockSession} />);
+      const links = screen.getAllByRole("link", { name: /^studio$/i });
+      links.forEach((link) => expect(link).toHaveAttribute("href", "/studio"));
+    });
+
     it("shows My Account link", () => {
       render(<Nav session={mockSession} />);
       const links = screen.getAllByRole("link", { name: /my account/i });

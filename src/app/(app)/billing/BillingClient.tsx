@@ -240,17 +240,19 @@ export default function BillingClient({ session, creditBalance: initialBalance }
                   className="rounded-[16px] p-6 border flex flex-col"
                   style={{ backgroundColor: "#F2EDE5", borderColor: "#D9CDB8" }}
                 >
-                  {icon && (
-                    <img
-                      src={icon}
-                      alt=""
-                      className="mb-3"
-                      style={{ width: 40, height: 40, objectFit: "contain" }}
-                    />
-                  )}
-                  <p className="text-base font-semibold mb-1" style={{ color: "#1C1410" }}>
-                    {sub.name.replace(/ \(.*\)$/, "")}
-                  </p>
+                  <div className="flex items-start gap-3 mb-4">
+                    {icon && (
+                      <img
+                        src={icon}
+                        alt=""
+                        className="shrink-0 mt-0.5"
+                        style={{ width: 40, height: 40, objectFit: "contain" }}
+                      />
+                    )}
+                    <div>
+                      <p className="text-base font-semibold mb-1" style={{ color: "#1C1410" }}>
+                        {sub.name.replace(/ \(.*\)$/, "")}
+                      </p>
                   <div className="flex items-baseline gap-2 mb-1">
                     <p
                       className="text-3xl font-light"
@@ -269,7 +271,7 @@ export default function BillingClient({ session, creditBalance: initialBalance }
                     </p>
                   )}
                   <p
-                    className="text-sm mb-5"
+                    className="text-sm"
                     style={{
                       fontFamily: "var(--font-mono), monospace",
                       color: "#6B5D52",
@@ -278,6 +280,8 @@ export default function BillingClient({ session, creditBalance: initialBalance }
                   >
                     {sub.creditsPerMonth} credits/month
                   </p>
+                    </div>
+                  </div>
                   <div className="mt-auto">
                     <Button
                       variant="primary"
@@ -314,22 +318,24 @@ export default function BillingClient({ session, creditBalance: initialBalance }
                   className="rounded-[16px] p-6 border flex flex-col"
                   style={{ backgroundColor: "#F2EDE5", borderColor: "#D9CDB8" }}
                 >
-                  {icon && (
-                    <img
-                      src={icon}
-                      alt=""
-                      className="mb-3"
-                      style={{ width: 40, height: 40, objectFit: "contain" }}
-                    />
-                  )}
-                  <p className="text-base font-semibold mb-1" style={{ color: "#1C1410" }}>
-                    {pack.name}
-                  </p>
-                  {description && (
-                    <p className="text-xs mb-1" style={{ color: "#8A7A6E" }}>
-                      {description}
-                    </p>
-                  )}
+                  <div className="flex items-start gap-3 mb-4">
+                    {icon && (
+                      <img
+                        src={icon}
+                        alt=""
+                        className="shrink-0 mt-0.5"
+                        style={{ width: 40, height: 40, objectFit: "contain" }}
+                      />
+                    )}
+                    <div>
+                      <p className="text-base font-semibold mb-1" style={{ color: "#1C1410" }}>
+                        {pack.name}
+                      </p>
+                      {description && (
+                        <p className="text-xs mb-1" style={{ color: "#8A7A6E" }}>
+                          {description}
+                        </p>
+                      )}
                   <p
                     className="text-3xl font-light mb-1"
                     style={{
@@ -343,7 +349,7 @@ export default function BillingClient({ session, creditBalance: initialBalance }
                     </span>
                   </p>
                   <p
-                    className="text-sm mb-5"
+                    className="text-sm"
                     style={{
                       fontFamily: "var(--font-mono), monospace",
                       color: "#6B5D52",
@@ -352,6 +358,8 @@ export default function BillingClient({ session, creditBalance: initialBalance }
                   >
                     ${pack.price.toFixed(2)} one-time
                   </p>
+                    </div>
+                  </div>
                   <div className="mt-auto">
                     <Button
                       variant="primary"
