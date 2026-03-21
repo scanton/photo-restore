@@ -1,17 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  async redirects() {
-    return [
-      {
-        // Canonicalize www → non-www so OAuth callbacks always use picrenew.com
-        source: "/:path*",
-        has: [{ type: "host", value: "www.picrenew.com" }],
-        destination: "https://picrenew.com/:path*",
-        permanent: true, // 308 — cached by browsers and CDNs
-      },
-    ];
-  },
   images: {
     remotePatterns: [
       {
