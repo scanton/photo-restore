@@ -79,7 +79,11 @@ export async function createKieTask(
 
 /**
  * Builds the callBackUrl for kie.ai to POST results to.
- * Embeds restorationId, phase, and a webhook secret for auth.
+ * Embeds restorationId and phase for routing.
+ *
+ * Authentication is handled by kie.ai's HMAC-SHA256 signature, sent in
+ * X-Webhook-Timestamp and X-Webhook-Signature request headers — not via
+ * a query param secret. See /api/webhooks/kie for verification logic.
  *
  * phase=initial → called after the 1K preview restoration
  * phase=hires   → called after the 2K/4K hi-res restoration
@@ -89,11 +93,9 @@ export function buildKieCallbackUrl(
   phase: "initial" | "hires"
 ): string {
   const base = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-  const secret = process.env.KIE_WEBHOOK_SECRET ?? "";
   return (
     `${base}/api/webhooks/kie` +
     `?restorationId=${encodeURIComponent(restorationId)}` +
-    `&phase=${phase}` +
-    `&secret=${encodeURIComponent(secret)}`
+    `&phase=${phase}`
   );
 }

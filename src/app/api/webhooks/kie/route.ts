@@ -5,10 +5,15 @@
  * task completes. Routes behavior based on the `phase` query parameter.
  *
  * URL format (constructed by buildKieCallbackUrl in lib/kie.ts):
- *   /api/webhooks/kie?restorationId=<uuid>&phase=initial|hires&secret=<token>
+ *   /api/webhooks/kie?restorationId=<uuid>&phase=initial|hires
  *
- * Authentication: KIE_WEBHOOK_SECRET in query param (not QStash — this is
- * kie.ai calling us, not Upstash).
+ * Authentication: kie.ai HMAC-SHA256 signature verification.
+ *   Headers sent by kie.ai on every callback:
+ *     X-Webhook-Timestamp  — Unix timestamp (seconds) when callback was sent
+ *     X-Webhook-Signature  — base64(HMAC-SHA256(taskId + "." + timestamp, webhookHmacKey))
+ *   KIE_WEBHOOK_HMAC_KEY   — the Webhook HMAC Key from kie.ai Settings page
+ *
+ * See: https://docs.kie.ai/common-api/webhook-verification.md
  *
  * phase=initial (1K preview):
  *   download output → burnWatermark → upload to Vercel Blob
@@ -23,18 +28,18 @@
  * NOTE: The kie.ai callback payload shape was discovered via live testing.
  * If the output URL field changes, update the extractOutputUrl() helper below.
  *
- *   ┌─────────────────────────────────────────────────────────────────────┐
- *   │  kie.ai → POST /api/webhooks/kie?restorationId=X&phase=Y&secret=Z  │
- *   │    ├─ missing/invalid secret → 401                                  │
- *   │    ├─ restoration not found → 404                                   │
- *   │    ├─ phase=initial → watermark → era → pending_payment            │
- *   │    ├─ phase=hires   → upload → complete → email                    │
- *   │    └─ unknown phase → 400                                           │
- *   └─────────────────────────────────────────────────────────────────────┘
+ *   ┌──────────────────────────────────────────────────────────────────────────┐
+ *   │  kie.ai → POST /api/webhooks/kie?restorationId=X&phase=Y               │
+ *   │    ├─ missing/invalid HMAC signature → 401                               │
+ *   │    ├─ restoration not found → 404                                        │
+ *   │    ├─ phase=initial → watermark → era → pending_payment                 │
+ *   │    ├─ phase=hires   → upload → complete → email                         │
+ *   │    └─ unknown phase → 400                                                │
+ *   └──────────────────────────────────────────────────────────────────────────┘
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { timingSafeEqual } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { put } from "@vercel/blob";
 import { db, restorations } from "@/lib/db";
 import { eq } from "drizzle-orm";
@@ -83,16 +88,43 @@ export async function POST(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const restorationId = searchParams.get("restorationId");
   const phase = searchParams.get("phase");
-  const secret = searchParams.get("secret");
 
-  // 1. Authenticate via shared secret (constant-time comparison to prevent timing attacks)
-  const expectedSecret = process.env.KIE_WEBHOOK_SECRET ?? "";
+  // 1. Read HMAC signature headers sent by kie.ai on every callback
+  const timestamp = req.headers.get("x-webhook-timestamp");
+  const receivedSignature = req.headers.get("x-webhook-signature");
+
+  if (!timestamp || !receivedSignature) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // 2. Parse body early — taskId from the payload is required to compute the HMAC signature.
+  //    Algorithm (per kie.ai docs): base64(HMAC-SHA256(taskId + "." + timestamp, hmacKey))
+  //    See: https://docs.kie.ai/common-api/webhook-verification.md
+  let payload: Record<string, unknown>;
+  try {
+    payload = (await req.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const data = payload.data as Record<string, unknown> | undefined;
+  const taskId = (data?.task_id ?? payload.taskId) as string | undefined;
+  if (!taskId) {
+    return NextResponse.json({ error: "Missing task_id in payload" }, { status: 400 });
+  }
+
+  // 3. Compute expected signature and compare constant-time (prevents timing attacks)
+  const hmacKey = process.env.KIE_WEBHOOK_HMAC_KEY ?? "";
+  const computedSignature = createHmac("sha256", hmacKey)
+    .update(`${taskId}.${timestamp}`)
+    .digest("base64");
+
   let authorized = false;
-  if (secret && secret.length === expectedSecret.length && expectedSecret.length > 0) {
+  if (hmacKey && computedSignature.length === receivedSignature.length) {
     try {
       authorized = timingSafeEqual(
-        Buffer.from(secret),
-        Buffer.from(expectedSecret)
+        Buffer.from(computedSignature),
+        Buffer.from(receivedSignature)
       );
     } catch {
       authorized = false;
@@ -116,15 +148,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 2. Parse kie.ai callback payload
-  let payload: Record<string, unknown>;
-  try {
-    payload = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  // 3. Extract output image URL from payload
+  // 4. Extract output image URL from payload
   const outputUrl = extractOutputUrl(payload);
   if (!outputUrl) {
     console.error(
@@ -137,7 +161,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 4. Load restoration
+  // 5. Load restoration
   const [restoration] = await db
     .select({
       id: restorations.id,
@@ -153,7 +177,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Restoration not found" }, { status: 404 });
   }
 
-  // 4a. Idempotency fast-path for phase=hires: if already complete, skip BEFORE downloading
+  // 5a. Idempotency fast-path for phase=hires: if already complete, skip BEFORE downloading
   //     the image. Without this check here, a duplicate kie.ai callback would download the
   //     full image buffer unnecessarily before discovering it can skip.
   if (phase === "hires" && restoration.status === "complete") {
