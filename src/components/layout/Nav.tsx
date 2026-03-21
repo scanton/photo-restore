@@ -18,6 +18,66 @@ interface NavProps {
   creditBalance?: number | null;
 }
 
+/** Compute two-letter initials from a session's name or email. */
+function getInitials(session: NavSession | null): string {
+  const name = session?.user?.name;
+  if (name) {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  const email = session?.user?.email;
+  if (email) return email[0].toUpperCase();
+  return "?";
+}
+
+/**
+ * Avatar circle — photo or initials fallback.
+ * Hoisted outside Nav so its component identity is stable across Nav re-renders,
+ * preventing unnecessary DOM remounts (React reconciliation anti-pattern).
+ */
+function AvatarCircle({
+  showAvatar,
+  session,
+  onError,
+  size = 32,
+}: {
+  showAvatar: boolean;
+  session: NavSession | null;
+  onError: () => void;
+  size?: number;
+}) {
+  return (
+    <div
+      className="relative shrink-0 rounded-full overflow-hidden flex items-center justify-center select-none"
+      style={{
+        width: size,
+        height: size,
+        backgroundColor: "#9B5424", // #FAF7F2 on #9B5424 = 5.3:1 — WCAG AA
+        color: "#FAF7F2",
+        fontSize: size * 0.375,
+        fontWeight: 600,
+        fontFamily: "var(--font-jakarta), system-ui, sans-serif",
+        cursor: "pointer",
+      }}
+    >
+      {showAvatar ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={session!.user!.image!}
+          alt={session?.user?.name ?? "Your avatar"}
+          width={size}
+          height={size}
+          className="absolute inset-0 w-full h-full object-cover"
+          onError={onError}
+        />
+      ) : (
+        <span aria-hidden="true">{getInitials(session)}</span>
+      )}
+    </div>
+  );
+}
+
 /**
  * Shared marketing nav — used on landing page, billing page, and anywhere
  * else that needs the top nav outside the app shell.
@@ -30,6 +90,7 @@ export function Nav({ session, creditBalance }: NavProps) {
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [imgError, setImgError] = useState(false);
   const avatarRef = useRef<HTMLDivElement>(null);
+  const avatarButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   const isLow = creditBalance !== null && creditBalance !== undefined && creditBalance <= 1;
@@ -77,6 +138,19 @@ export function Nav({ session, creditBalance }: NavProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, [menuOpen]);
 
+  // Close avatar dropdown on Escape — returns focus to the trigger button (ARIA menu pattern)
+  useEffect(() => {
+    if (!avatarOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setAvatarOpen(false);
+        avatarButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [avatarOpen]);
+
   // Close mobile menu on Escape
   useEffect(() => {
     if (!menuOpen) return;
@@ -87,51 +161,7 @@ export function Nav({ session, creditBalance }: NavProps) {
     return () => document.removeEventListener("keydown", handler);
   }, [menuOpen]);
 
-  /** Initials from user's display name or email */
-  const getInitials = () => {
-    const name = session?.user?.name;
-    if (name) {
-      const parts = name.trim().split(/\s+/);
-      if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-      return parts[0].slice(0, 2).toUpperCase();
-    }
-    const email = session?.user?.email;
-    if (email) return email[0].toUpperCase();
-    return "?";
-  };
-
   const showAvatar = !!session?.user?.image && !imgError;
-
-  /** Avatar circle — photo or initials fallback */
-  const AvatarCircle = ({ size = 32 }: { size?: number }) => (
-    <div
-      className="relative shrink-0 rounded-full overflow-hidden flex items-center justify-center select-none"
-      style={{
-        width: size,
-        height: size,
-        backgroundColor: "#9B5424", // #FAF7F2 on #9B5424 = 5.3:1 — WCAG AA
-        color: "#FAF7F2",
-        fontSize: size * 0.375,
-        fontWeight: 600,
-        fontFamily: "var(--font-jakarta), system-ui, sans-serif",
-        cursor: "pointer",
-      }}
-    >
-      {showAvatar ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={session!.user!.image!}
-          alt={session?.user?.name ?? "Your avatar"}
-          width={size}
-          height={size}
-          className="absolute inset-0 w-full h-full object-cover"
-          onError={() => setImgError(true)}
-        />
-      ) : (
-        <span aria-hidden="true">{getInitials()}</span>
-      )}
-    </div>
-  );
 
   return (
     <header
@@ -178,6 +208,7 @@ export function Nav({ session, creditBalance }: NavProps) {
               {/* Avatar dropdown */}
               <div ref={avatarRef} className="relative">
                 <button
+                  ref={avatarButtonRef}
                   aria-label="Account menu"
                   aria-expanded={avatarOpen}
                   aria-haspopup="true"
@@ -185,7 +216,7 @@ export function Nav({ session, creditBalance }: NavProps) {
                   className="flex items-center rounded-full transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                   style={{ outlineColor: "#B5622A" }}
                 >
-                  <AvatarCircle size={34} />
+                  <AvatarCircle showAvatar={showAvatar} session={session} onError={() => setImgError(true)} size={34} />
                 </button>
 
                 {avatarOpen && (
@@ -201,7 +232,7 @@ export function Nav({ session, creditBalance }: NavProps) {
                     <Link
                       href="/account"
                       role="menuitem"
-                      className="block px-4 py-2.5 text-sm font-medium transition-colors"
+                      className="block px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:bg-[#F2EDE5]"
                       style={{ color: "#1C1410" }}
                       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "#F2EDE5")}
                       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "transparent")}
@@ -212,7 +243,7 @@ export function Nav({ session, creditBalance }: NavProps) {
                     <Link
                       href="/studio"
                       role="menuitem"
-                      className="block px-4 py-2.5 text-sm font-medium transition-colors"
+                      className="block px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:bg-[#F2EDE5]"
                       style={{ color: "#1C1410" }}
                       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "#F2EDE5")}
                       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "transparent")}
@@ -224,7 +255,7 @@ export function Nav({ session, creditBalance }: NavProps) {
                     <button
                       role="menuitem"
                       onClick={() => { setAvatarOpen(false); signOut({ callbackUrl: "/" }); }}
-                      className="block w-full text-left px-4 py-2.5 text-sm font-medium transition-colors"
+                      className="block w-full text-left px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:bg-[#F2EDE5]"
                       style={{ color: "#6B5D52" }}
                       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "#F2EDE5")}
                       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "transparent")}
@@ -288,12 +319,13 @@ export function Nav({ session, creditBalance }: NavProps) {
           className="md:hidden border-t px-6 py-4 flex flex-col gap-4"
           style={{ borderColor: "#EDE5D8", backgroundColor: "#FAF7F2" }}
           role="dialog"
+          aria-modal="true"
           aria-label="Navigation menu"
         >
           {/* Mobile drawer header — avatar or sign-in */}
           {session?.user && (
             <div className="flex items-center gap-3 pb-3 border-b" style={{ borderColor: "#EDE5D8" }}>
-              <AvatarCircle size={36} />
+              <AvatarCircle showAvatar={showAvatar} session={session} onError={() => setImgError(true)} size={36} />
               <div className="flex flex-col min-w-0">
                 {session.user.name && (
                   <span className="text-sm font-semibold truncate" style={{ color: "#1C1410" }}>

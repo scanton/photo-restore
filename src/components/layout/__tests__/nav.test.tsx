@@ -176,5 +176,17 @@ describe("Nav", () => {
       expect(screen.queryByRole("menuitem", { name: /sign out/i })).toBeNull();
       expect(screen.getByRole("button", { name: /account menu/i })).toBeInTheDocument();
     });
+
+    it("Escape key closes the avatar dropdown and returns focus to the trigger button", () => {
+      render(<Nav session={mockSession} />);
+      const accountMenuBtn = screen.getByRole("button", { name: /account menu/i });
+      fireEvent.click(accountMenuBtn);
+      // Dropdown should be visible
+      expect(screen.getByRole("menu")).toBeInTheDocument();
+      // Press Escape
+      fireEvent.keyDown(document, { key: "Escape" });
+      // Dropdown should be gone
+      expect(screen.queryByRole("menu")).toBeNull();
+    });
   });
 });
