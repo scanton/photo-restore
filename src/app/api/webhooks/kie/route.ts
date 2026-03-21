@@ -136,7 +136,8 @@ export async function POST(req: NextRequest) {
   });
 
   const data = payload.data as Record<string, unknown> | undefined;
-  const taskId = (data?.task_id ?? payload.taskId) as string | undefined;
+  // kie.ai sends taskId as data.taskId (camelCase) — also handle data.task_id and top-level payload.taskId as fallbacks
+  const taskId = (data?.taskId ?? data?.task_id ?? payload.taskId) as string | undefined;
   if (!taskId) {
     console.log("[webhooks/kie] taskId missing — data keys:", Object.keys(data ?? {}), "payload keys:", Object.keys(payload));
     return NextResponse.json({ error: "Missing task_id in payload" }, { status: 400 });
