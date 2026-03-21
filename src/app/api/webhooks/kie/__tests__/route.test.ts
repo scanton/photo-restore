@@ -225,6 +225,26 @@ describe("POST /api/webhooks/kie", () => {
     expect(res.status).toBe(200);
   });
 
+  it("extracts output URL from data.resultJson (canonical kie.ai callback shape)", async () => {
+    mockSelect.mockResolvedValue([BASE_RESTORATION]);
+    // Per docs: resultJson is a JSON-encoded string, not an object
+    const body = {
+      taskId: DEFAULT_TASK_ID,
+      code: 200,
+      data: {
+        task_id: DEFAULT_TASK_ID,
+        state: "success",
+        resultJson: JSON.stringify({ resultUrls: ["https://cdn.kie.ai/output.png"] }),
+        callbackType: "task_completed",
+      },
+    };
+    const req = buildRequest({ body });
+    const res = await callPOST(req);
+    expect(res.status).toBe(200);
+    // Verify fetch was called with the URL from resultUrls[0]
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith("https://cdn.kie.ai/output.png");
+  });
+
   // ── Restoration not found ─────────────────────────────────────────────────
 
   it("returns 404 when restoration is not in DB", async () => {

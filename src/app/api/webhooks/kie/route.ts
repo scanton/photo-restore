@@ -55,26 +55,49 @@ export const maxDuration = 60;
 /**
  * Extracts the output image URL from the kie.ai callback payload.
  *
- * NOTE: kie.ai callback payload shape was verified via live test call (2026-03-20).
- * We attempt several common field names defensively in case the API changes.
+ * Per kie.ai docs (docs.kie.ai/market/common/get-task-detail.md), the canonical
+ * callback shape is:
  *
- * Expected shape (to be confirmed via Vercel logs on first real callback):
- *   { taskId: string, status: "success"|"failed", output: { image_url: string } }
+ *   {
+ *     taskId: string,
+ *     code: number,
+ *     data: {
+ *       task_id: string,
+ *       state: "success" | "fail",
+ *       resultJson: '{"resultUrls":["https://cdn.kie.ai/output.png"]}',  // JSON STRING
+ *       callbackType: "task_completed",
+ *       failCode: string,
+ *       failMsg: string,
+ *     }
+ *   }
  *
- * console.log below will print the full payload to Vercel logs on first run —
- * use this to verify the field names are correct and remove the log afterward.
+ * `resultJson` is a JSON-encoded string (not an object) — must be parsed.
+ * We also probe legacy/fallback field paths in case the shape differs for
+ * nano-banana-2 specifically or changes in a future kie.ai API update.
+ *
+ * See docs/kie/README.md for full integration reference.
  */
 function extractOutputUrl(payload: Record<string, unknown>): string | null {
-  // Log full payload on first real call so we can verify the shape
+  // Log full payload on every call until confirmed correct in production.
+  // Remove this log once the field path is verified via Vercel logs.
   console.log("[kie webhook] callback payload:", JSON.stringify(payload));
 
-  // Try the most likely field paths
+  // Primary path: data.resultJson → JSON string → resultUrls[0]
+  const data = payload.data as Record<string, unknown> | undefined;
+  if (typeof data?.resultJson === "string") {
+    try {
+      const parsed = JSON.parse(data.resultJson) as { resultUrls?: string[] };
+      if (parsed.resultUrls?.[0]) return parsed.resultUrls[0];
+    } catch {
+      // malformed resultJson — fall through to legacy paths
+    }
+  }
+
+  // Legacy / fallback paths (kept in case nano-banana-2 deviates from the common shape)
   const output = payload.output as Record<string, unknown> | undefined;
   if (output?.image_url) return output.image_url as string;
   if (output?.url) return output.url as string;
   if (output?.imageUrl) return output.imageUrl as string;
-
-  // Flat fields
   if (payload.image_url) return payload.image_url as string;
   if (payload.output_url) return payload.output_url as string;
   if (payload.result_url) return payload.result_url as string;
