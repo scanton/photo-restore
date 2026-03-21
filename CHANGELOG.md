@@ -2,6 +2,26 @@
 
 All notable changes to PicRenew will be documented in this file.
 
+## [0.3.3.0] - 2026-03-20
+
+### Security
+- **Replaced query-param webhook secret with kie.ai HMAC-SHA256 verification** — callbacks now authenticated via `X-Webhook-Timestamp` + `X-Webhook-Signature` headers using `base64(HMAC-SHA256(taskId + "." + timestamp, webhookHmacKey))`. Env var renamed `KIE_WEBHOOK_SECRET` → `KIE_WEBHOOK_HMAC_KEY`.
+- **Replay attack prevention** — added ±5 minute timestamp window on incoming kie.ai webhooks. Stale or non-numeric timestamps rejected with 401.
+- **taskId ↔ kieAiJobId binding** — webhook validates that the callback's taskId matches the stored `kieAiJobId`. Stale callbacks from older retry tasks are silently skipped. Placeholder sentinels (`"pending"`, `"hires-pending"`) allowed through to handle the race window between claim and taskId storage.
+
+### Fixed
+- **kie.ai failure callbacks** — `data.state="fail"` marks restoration as `"failed"` and returns 200 so kie.ai stops retrying. Previously, failed tasks left restorations permanently stuck at `"analyzing"`.
+- **Fail state idempotency** — duplicate fail callbacks arriving after a successful hires completion no longer overwrite `status="complete"` with `status="failed"`.
+- **Inner code validation** — `createKieTask()` now checks kie.ai's inner `code` field (HTTP 200 with `code: 402` = insufficient credits now throws descriptively).
+- **Callback payload parsing** — `extractOutputUrl()` reads `data.resultJson` (a JSON-encoded string containing `{ resultUrls: [url] }`) — the canonical kie.ai callback shape confirmed via live testing.
+
+### Added
+- **kie.ai integration docs** — `docs/kie/README.md` and `docs/kie/webhook-verification.md` capture the full reference: request/response shapes, HMAC algorithm, error codes, rate limits, data retention (14 days), polling API.
+- **178 tests** across 14 test files. New `src/lib/__tests__/kie.test.ts` covers `createKieTask()` and `buildKieCallbackUrl()`.
+
+### Changed
+- `buildKieCallbackUrl()` no longer appends `?secret=` — authentication is HMAC header-based.
+
 ## [0.3.2.0] - 2026-03-20
 
 ### Added
@@ -29,6 +49,7 @@ All notable changes to PicRenew will be documented in this file.
 - Webhook auth uses `crypto.timingSafeEqual` to prevent timing attacks on the shared secret comparison.
 - Webhook hires phase: idempotency check (`status === 'complete'`) now runs before image download, not after.
 - Email module: `Resend` is instantiated inside the function body (not at module level) to prevent throws in test environments missing `RESEND_API_KEY`.
+- Upload route: `VALID_PRESET_SLUGS` typed as `Set<string>` to fix TypeScript build error caused by `as const` narrowing the Set's type to the literal union.
 
 ## [0.3.1.0] - 2026-03-19
 

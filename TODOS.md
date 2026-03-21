@@ -50,15 +50,15 @@
 
 ---
 
-### kie.ai 4xx Error Discrimination
-**What:** In `/api/jobs/restore` and `/api/jobs/restore-hires`, distinguish permanent kie.ai errors (4xx: wrong API key, malformed request) from transient errors (5xx: kie.ai downtime). On permanent 4xx, return 200 so QStash stops retrying and immediately fire the failure path.
-**Why:** A misconfigured API key currently wastes 3 kie.ai requests (maxRetries) before the job dies. Post-launch, a bad deploy could drain API quota or delay failure detection by minutes.
-**Pros:** Faster failure detection; prevents wasted API calls on permanent errors.
-**Cons:** Requires kie.ai's status codes to be reliable and well-documented — may not be the case for an early-stage API.
-**Context:** Identified during /plan-eng-review (2026-03-20). Deferred because: (a) config errors are caught in staging before prod, (b) kie.ai 4xx behavior not yet fully documented. Revisit once the API is stable and we have real production error data.
+### kie.ai Retry Discrimination: 4xx vs 5xx
+**What:** In `/api/jobs/restore` and `/api/jobs/restore-hires`, distinguish permanent kie.ai errors (inner code 402 = insufficient credits, 401 = bad API key) from transient errors (5xx = kie.ai downtime). On permanent errors, return 200 so QStash stops retrying and immediately fires the failure path.
+**Why:** `createKieTask()` now throws on any non-200 inner code, so QStash retries all failures. But retrying a 402 (out of credits) wastes 3 API calls before the job dies — and leaves the user waiting. Faster failure detection = better UX.
+**Pros:** Prevents wasted API calls and credit usage on permanent errors; faster failure detection post-launch.
+**Cons:** Requires kie.ai's inner status codes to be reliable in production — not yet verified under real load.
+**Context:** Inner json.code validation was added in feat/restoration-pipeline (2026-03-20). The remaining work is teaching the job routes to classify which codes are permanent vs transient. Revisit once we have real production error data from kie.ai callbacks.
 **Effort:** XS (human: ~1 hr / CC: ~5 min)
 **Priority:** P3
-**Depends on:** Stable kie.ai API with predictable status codes
+**Depends on:** Stable kie.ai API with predictable inner status codes in production
 
 ---
 
@@ -99,6 +99,13 @@
 ---
 
 ## Completed
+
+### kie.ai Webhook Security + Failure Handling
+**Completed:** feat/restoration-pipeline (2026-03-20)
+
+Full kie.ai webhook hardening: (1) HMAC-SHA256 verification — `X-Webhook-Timestamp` + `X-Webhook-Signature` headers via `base64(HMAC-SHA256(taskId + "." + timestamp, webhookHmacKey))`; (2) ±5 min timestamp window to prevent replay attacks; (3) `data.state="fail"` handling — marks restoration as `"failed"` and returns 200 so kie.ai stops retrying (previously left restorations permanently stuck at "analyzing"); (4) inner `json.code` validation in `createKieTask()` — HTTP 200 with code=402 now throws descriptively. 174 tests passing.
+
+---
 
 ### Billing UI, Resolution Picker + Analytics (v0.3.1.0 — 2026-03-19)
 **Completed:** v0.3.1.0 (2026-03-19)

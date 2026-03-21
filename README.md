@@ -82,7 +82,7 @@ npm run dev
 
 ```bash
 # Run tests
-npm run test           # Vitest unit/integration (161 tests)
+npm run test           # Vitest unit/integration (178 tests)
 ```
 
 ---
@@ -112,6 +112,6 @@ Available skills: `/browse`, `/plan-ceo-review`, `/plan-eng-review`, `/design-co
 
 ## Status
 
-**v0.3.2.0 — Full AI restoration pipeline live.**
+**v0.3.3.0 — Webhook security hardened and failure handling complete.**
 
-Async pipeline end-to-end: upload → QStash job → kie.ai restoration → watermarked preview → purchase → full-res delivery via kie.ai + Resend email. Includes era estimation (OpenRouter), 2K/4K hi-res support, and a complete failure-handling path. 161 tests passing. Ready for real users.
+Full HMAC-SHA256 webhook authentication (kie.ai canonical approach), replay attack prevention, stale callback detection, kie.ai failure callback handling (no more permanently stuck restorations), and inner code validation. 178 tests passing. Ready for real users.

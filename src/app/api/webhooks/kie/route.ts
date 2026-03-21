@@ -5,10 +5,15 @@
  * task completes. Routes behavior based on the `phase` query parameter.
  *
  * URL format (constructed by buildKieCallbackUrl in lib/kie.ts):
- *   /api/webhooks/kie?restorationId=<uuid>&phase=initial|hires&secret=<token>
+ *   /api/webhooks/kie?restorationId=<uuid>&phase=initial|hires
  *
- * Authentication: KIE_WEBHOOK_SECRET in query param (not QStash — this is
- * kie.ai calling us, not Upstash).
+ * Authentication: kie.ai HMAC-SHA256 signature verification.
+ *   Headers sent by kie.ai on every callback:
+ *     X-Webhook-Timestamp  — Unix timestamp (seconds) when callback was sent
+ *     X-Webhook-Signature  — base64(HMAC-SHA256(taskId + "." + timestamp, webhookHmacKey))
+ *   KIE_WEBHOOK_HMAC_KEY   — the Webhook HMAC Key from kie.ai Settings page
+ *
+ * See: https://docs.kie.ai/common-api/webhook-verification.md
  *
  * phase=initial (1K preview):
  *   download output → burnWatermark → upload to Vercel Blob
@@ -23,18 +28,18 @@
  * NOTE: The kie.ai callback payload shape was discovered via live testing.
  * If the output URL field changes, update the extractOutputUrl() helper below.
  *
- *   ┌─────────────────────────────────────────────────────────────────────┐
- *   │  kie.ai → POST /api/webhooks/kie?restorationId=X&phase=Y&secret=Z  │
- *   │    ├─ missing/invalid secret → 401                                  │
- *   │    ├─ restoration not found → 404                                   │
- *   │    ├─ phase=initial → watermark → era → pending_payment            │
- *   │    ├─ phase=hires   → upload → complete → email                    │
- *   │    └─ unknown phase → 400                                           │
- *   └─────────────────────────────────────────────────────────────────────┘
+ *   ┌──────────────────────────────────────────────────────────────────────────┐
+ *   │  kie.ai → POST /api/webhooks/kie?restorationId=X&phase=Y               │
+ *   │    ├─ missing/invalid HMAC signature → 401                               │
+ *   │    ├─ restoration not found → 404                                        │
+ *   │    ├─ phase=initial → watermark → era → pending_payment                 │
+ *   │    ├─ phase=hires   → upload → complete → email                         │
+ *   │    └─ unknown phase → 400                                                │
+ *   └──────────────────────────────────────────────────────────────────────────┘
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { timingSafeEqual } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { put } from "@vercel/blob";
 import { db, restorations } from "@/lib/db";
 import { eq } from "drizzle-orm";
@@ -50,26 +55,49 @@ export const maxDuration = 60;
 /**
  * Extracts the output image URL from the kie.ai callback payload.
  *
- * NOTE: kie.ai callback payload shape was verified via live test call (2026-03-20).
- * We attempt several common field names defensively in case the API changes.
+ * Per kie.ai docs (docs.kie.ai/market/common/get-task-detail.md), the canonical
+ * callback shape is:
  *
- * Expected shape (to be confirmed via Vercel logs on first real callback):
- *   { taskId: string, status: "success"|"failed", output: { image_url: string } }
+ *   {
+ *     taskId: string,
+ *     code: number,
+ *     data: {
+ *       task_id: string,
+ *       state: "success" | "fail",
+ *       resultJson: '{"resultUrls":["https://cdn.kie.ai/output.png"]}',  // JSON STRING
+ *       callbackType: "task_completed",
+ *       failCode: string,
+ *       failMsg: string,
+ *     }
+ *   }
  *
- * console.log below will print the full payload to Vercel logs on first run —
- * use this to verify the field names are correct and remove the log afterward.
+ * `resultJson` is a JSON-encoded string (not an object) — must be parsed.
+ * We also probe legacy/fallback field paths in case the shape differs for
+ * nano-banana-2 specifically or changes in a future kie.ai API update.
+ *
+ * See docs/kie/README.md for full integration reference.
  */
 function extractOutputUrl(payload: Record<string, unknown>): string | null {
-  // Log full payload on first real call so we can verify the shape
+  // Log full payload on every call until confirmed correct in production.
+  // Remove this log once the field path is verified via Vercel logs.
   console.log("[kie webhook] callback payload:", JSON.stringify(payload));
 
-  // Try the most likely field paths
+  // Primary path: data.resultJson → JSON string → resultUrls[0]
+  const data = payload.data as Record<string, unknown> | undefined;
+  if (typeof data?.resultJson === "string") {
+    try {
+      const parsed = JSON.parse(data.resultJson) as { resultUrls?: string[] };
+      if (parsed.resultUrls?.[0]) return parsed.resultUrls[0];
+    } catch {
+      // malformed resultJson — fall through to legacy paths
+    }
+  }
+
+  // Legacy / fallback paths (kept in case nano-banana-2 deviates from the common shape)
   const output = payload.output as Record<string, unknown> | undefined;
   if (output?.image_url) return output.image_url as string;
   if (output?.url) return output.url as string;
   if (output?.imageUrl) return output.imageUrl as string;
-
-  // Flat fields
   if (payload.image_url) return payload.image_url as string;
   if (payload.output_url) return payload.output_url as string;
   if (payload.result_url) return payload.result_url as string;
@@ -83,16 +111,52 @@ export async function POST(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const restorationId = searchParams.get("restorationId");
   const phase = searchParams.get("phase");
-  const secret = searchParams.get("secret");
 
-  // 1. Authenticate via shared secret (constant-time comparison to prevent timing attacks)
-  const expectedSecret = process.env.KIE_WEBHOOK_SECRET ?? "";
+  // 1. Read HMAC signature headers sent by kie.ai on every callback
+  const timestamp = req.headers.get("x-webhook-timestamp");
+  const receivedSignature = req.headers.get("x-webhook-signature");
+
+  if (!timestamp || !receivedSignature) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // 2. Parse body early — taskId from the payload is required to compute the HMAC signature.
+  let payload: Record<string, unknown>;
+  try {
+    payload = (await req.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const data = payload.data as Record<string, unknown> | undefined;
+  const taskId = (data?.task_id ?? payload.taskId) as string | undefined;
+  if (!taskId) {
+    return NextResponse.json({ error: "Missing task_id in payload" }, { status: 400 });
+  }
+
+  // 3. Reject stale timestamps to prevent replay attacks (industry standard: ±5 min window).
+  //    A replayed payload can only affect the specific restorationId in the URL, but
+  //    rejecting it early is cheap and correct.
+  const tsSeconds = parseInt(timestamp, 10);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (isNaN(tsSeconds) || Math.abs(nowSeconds - tsSeconds) > 300) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // 4. Compute expected signature and compare constant-time (prevents timing attacks).
+  //    Algorithm (per kie.ai docs): base64(HMAC-SHA256(taskId + "." + timestamp, hmacKey))
+  //    See: https://docs.kie.ai/common-api/webhook-verification.md
+  const hmacKey = process.env.KIE_WEBHOOK_HMAC_KEY ?? "";
+  const computedSignature = createHmac("sha256", hmacKey)
+    .update(`${taskId}.${timestamp}`)
+    .digest("base64");
+
   let authorized = false;
-  if (secret && secret.length === expectedSecret.length && expectedSecret.length > 0) {
+  if (hmacKey && computedSignature.length === receivedSignature.length) {
     try {
       authorized = timingSafeEqual(
-        Buffer.from(secret),
-        Buffer.from(expectedSecret)
+        Buffer.from(computedSignature),
+        Buffer.from(receivedSignature)
       );
     } catch {
       authorized = false;
@@ -116,15 +180,67 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 2. Parse kie.ai callback payload
-  let payload: Record<string, unknown>;
-  try {
-    payload = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  // 5. Load restoration
+  const [restoration] = await db
+    .select({
+      id: restorations.id,
+      userId: restorations.userId,
+      inputBlobUrl: restorations.inputBlobUrl,
+      status: restorations.status,
+      kieAiJobId: restorations.kieAiJobId,
+    })
+    .from(restorations)
+    .where(eq(restorations.id, restorationId))
+    .limit(1);
+
+  if (!restoration) {
+    return NextResponse.json({ error: "Restoration not found" }, { status: 404 });
   }
 
-  // 3. Extract output image URL from payload
+  // 5a-pre. Verify taskId matches the stored kieAiJobId (defense-in-depth).
+  //   Guards against stale callbacks from an older task (e.g. a retry job replaced the
+  //   kieAiJobId with a new task, but the old callback arrived late).
+  //
+  //   Bypass cases (allow through without checking):
+  //   - kieAiJobId is null — job may not have stored the ID yet
+  //   - kieAiJobId is a placeholder sentinel ("pending" / "hires-pending") — the job
+  //     claimed the slot but hasn't written the real taskId yet (narrow race window).
+  //     The HMAC + URL-embedded restorationId already bind this callback to the right restoration.
+  const PENDING_SENTINELS = new Set(["pending", "hires-pending"]);
+  if (restoration.kieAiJobId &&
+      !PENDING_SENTINELS.has(restoration.kieAiJobId) &&
+      taskId !== restoration.kieAiJobId) {
+    console.warn(
+      `[kie webhook] taskId mismatch: expected=${restoration.kieAiJobId} got=${taskId} restorationId=${restorationId} — skipping stale callback`
+    );
+    return NextResponse.json({ ok: true, skipped: true });
+  }
+
+  // 5a. Handle kie.ai failure notifications BEFORE extracting the output URL.
+  //     data.state = "fail" means generation failed on kie.ai's side (insufficient credits,
+  //     model error, etc.). Failure payloads have no output URL — checking extractOutputUrl
+  //     first would return 422 and leave the restoration permanently stuck at "analyzing".
+  //     Return 200 so kie.ai does not retry.
+  const kieState = (payload.data as Record<string, unknown> | undefined)?.state;
+  if (kieState === "fail") {
+    // Idempotency: if already complete (e.g. delayed duplicate fail callback arriving after
+    // a successful hires phase), don't overwrite "complete" with "failed".
+    if (restoration.status === "complete") {
+      return NextResponse.json({ ok: true, skipped: true });
+    }
+    const failCode = (payload.data as Record<string, unknown> | undefined)?.failCode ?? "";
+    const failMsg = (payload.data as Record<string, unknown> | undefined)?.failMsg ?? "";
+    console.error(
+      `[kie webhook] Task failed: restorationId=${restorationId} failCode=${failCode} failMsg=${failMsg}`
+    );
+    await db
+      .update(restorations)
+      .set({ status: "failed" })
+      .where(eq(restorations.id, restorationId));
+    return NextResponse.json({ ok: true, failed: true });
+  }
+
+  // 5b. Extract output image URL from payload (only for successful callbacks)
   const outputUrl = extractOutputUrl(payload);
   if (!outputUrl) {
     console.error(
@@ -137,30 +253,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 4. Load restoration
-  const [restoration] = await db
-    .select({
-      id: restorations.id,
-      userId: restorations.userId,
-      inputBlobUrl: restorations.inputBlobUrl,
-      status: restorations.status,
-    })
-    .from(restorations)
-    .where(eq(restorations.id, restorationId))
-    .limit(1);
-
-  if (!restoration) {
-    return NextResponse.json({ error: "Restoration not found" }, { status: 404 });
-  }
-
-  // 4a. Idempotency fast-path for phase=hires: if already complete, skip BEFORE downloading
+  // 5c. Idempotency fast-path for phase=hires: if already complete, skip BEFORE downloading
   //     the image. Without this check here, a duplicate kie.ai callback would download the
   //     full image buffer unnecessarily before discovering it can skip.
   if (phase === "hires" && restoration.status === "complete") {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  // 5. Download kie.ai output image
+  // 6. Download kie.ai output image
   let outputBuffer: Buffer;
   try {
     const imageRes = await fetch(outputUrl);

@@ -30,7 +30,7 @@ vi.mock("@/lib/db", () => ({
       }),
     }),
   },
-  restorations: { id: "id", userId: "user_id", inputBlobUrl: "input_blob_url", status: "status" },
+  restorations: { id: "id", userId: "user_id", inputBlobUrl: "input_blob_url", status: "status", kieAiJobId: "kie_ai_job_id" },
 }));
 
 vi.mock("@/lib/watermark", () => ({ burnWatermark: mockBurnWatermark }));
@@ -39,36 +39,60 @@ vi.mock("@/lib/email/send", () => ({ sendRestorationReadyEmail: mockSendEmail })
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const SECRET = "test-webhook-secret-32-chars-abcd";
-process.env.KIE_WEBHOOK_SECRET = SECRET;
+import { createHmac } from "crypto";
+
+const HMAC_KEY = "test-webhook-hmac-key-from-kie-ai-settings";
+const DEFAULT_TASK_ID = "kie-task-123";
+
+process.env.KIE_WEBHOOK_HMAC_KEY = HMAC_KEY;
+
+/** Compute the kie.ai HMAC signature: base64(HMAC-SHA256(taskId + "." + timestamp, key)) */
+function computeKieSignature(taskId: string, timestamp: string, key: string): string {
+  return createHmac("sha256", key).update(`${taskId}.${timestamp}`).digest("base64");
+}
 
 function buildRequest(
   opts: {
-    secret?: string | null;
+    /** Override X-Webhook-Signature header (pass empty string to omit) */
+    signature?: string | null;
+    /** Override X-Webhook-Timestamp header (pass empty string to omit) */
+    timestamp?: string | null;
+    /** taskId used to compute HMAC (defaults to DEFAULT_TASK_ID) */
+    signingTaskId?: string;
     restorationId?: string;
     phase?: string;
     body?: unknown;
   } = {}
 ) {
-  const secret = opts.secret === null ? "" : (opts.secret ?? SECRET);
   const restorationId = opts.restorationId ?? "res-uuid-123";
   const phase = opts.phase ?? "initial";
   const body = opts.body ?? {
-    taskId: "kie-task-123",
+    taskId: DEFAULT_TASK_ID,
     status: "success",
     output: { image_url: "https://kie.ai/output.png" },
   };
 
+  // Default to current time so the ±5 min replay window passes in tests
+  const timestamp = opts.timestamp === null ? "" : (opts.timestamp ?? String(Math.floor(Date.now() / 1000)));
+  const signingTaskId = opts.signingTaskId ?? DEFAULT_TASK_ID;
+  const signature =
+    opts.signature === null
+      ? ""
+      : (opts.signature ?? computeKieSignature(signingTaskId, timestamp, HMAC_KEY));
+
   const params = new URLSearchParams();
   if (restorationId) params.set("restorationId", restorationId);
   if (phase) params.set("phase", phase);
-  if (secret) params.set("secret", secret);
 
   const url = `http://localhost/api/webhooks/kie?${params.toString()}`;
 
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (timestamp) headers["x-webhook-timestamp"] = timestamp;
+  if (signature) headers["x-webhook-signature"] = signature;
+
   return new NextRequest(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
 }
@@ -83,6 +107,7 @@ const BASE_RESTORATION = {
   userId: "user-abc",
   inputBlobUrl: "https://blob.vercel.com/input.jpg",
   status: "analyzing",
+  kieAiJobId: DEFAULT_TASK_ID,
 };
 
 async function callPOST(req: NextRequest) {
@@ -96,7 +121,7 @@ async function callPOST(req: NextRequest) {
 describe("POST /api/webhooks/kie", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.KIE_WEBHOOK_SECRET = SECRET;
+    process.env.KIE_WEBHOOK_HMAC_KEY = HMAC_KEY;
 
     mockBurnWatermark.mockResolvedValue(Buffer.from("watermarked"));
     mockEstimateEra.mockResolvedValue(null);
@@ -114,23 +139,46 @@ describe("POST /api/webhooks/kie", () => {
     vi.unstubAllGlobals();
   });
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
+  // ── Auth (HMAC-SHA256 header verification) ────────────────────────────────
 
-  it("returns 401 when secret is missing", async () => {
-    const req = buildRequest({ secret: null });
+  it("returns 401 when HMAC headers are missing", async () => {
+    const req = buildRequest({ signature: null, timestamp: null });
     const res = await callPOST(req);
     expect(res.status).toBe(401);
   });
 
-  it("returns 401 when secret is wrong", async () => {
-    const req = buildRequest({ secret: "wrong-secret-same-length-as-real!" });
+  it("returns 401 when X-Webhook-Signature is wrong", async () => {
+    const req = buildRequest({ signature: "bm90LWEtcmVhbC1zaWduYXR1cmU=" });
     const res = await callPOST(req);
     expect(res.status).toBe(401);
   });
 
-  it("returns 401 when KIE_WEBHOOK_SECRET env is empty", async () => {
-    process.env.KIE_WEBHOOK_SECRET = "";
-    const req = buildRequest({ secret: "anything" });
+  it("returns 401 when KIE_WEBHOOK_HMAC_KEY env is empty", async () => {
+    process.env.KIE_WEBHOOK_HMAC_KEY = "";
+    const req = buildRequest();
+    const res = await callPOST(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 when signature is computed with wrong key", async () => {
+    const ts = String(Math.floor(Date.now() / 1000));
+    const req = buildRequest({ signature: computeKieSignature(DEFAULT_TASK_ID, ts, "wrong-key"), timestamp: ts });
+    const res = await callPOST(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 when timestamp is more than 5 minutes old (replay attack prevention)", async () => {
+    const oldTimestamp = String(Math.floor(Date.now() / 1000) - 360); // 6 minutes ago
+    const req = buildRequest({
+      timestamp: oldTimestamp,
+      signature: computeKieSignature(DEFAULT_TASK_ID, oldTimestamp, HMAC_KEY),
+    });
+    const res = await callPOST(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 when timestamp is not a valid number", async () => {
+    const req = buildRequest({ timestamp: "not-a-timestamp" });
     const res = await callPOST(req);
     expect(res.status).toBe(401);
   });
@@ -157,23 +205,62 @@ describe("POST /api/webhooks/kie", () => {
 
   it("returns 422 when output URL cannot be found in payload", async () => {
     mockSelect.mockResolvedValue([BASE_RESTORATION]);
-    const req = buildRequest({ body: { taskId: "123", status: "success" } });
+    // Body has taskId (needed for HMAC) but no output URL fields
+    const req = buildRequest({ body: { taskId: DEFAULT_TASK_ID, status: "success" } });
     const res = await callPOST(req);
     expect(res.status).toBe(422);
   });
 
   it("extracts output URL from output.image_url field", async () => {
     mockSelect.mockResolvedValue([BASE_RESTORATION]);
-    const req = buildRequest({ body: { output: { image_url: "https://kie.ai/output.png" } } });
+    const req = buildRequest({
+      body: { taskId: DEFAULT_TASK_ID, output: { image_url: "https://kie.ai/output.png" } },
+    });
     const res = await callPOST(req);
     expect(res.status).toBe(200);
   });
 
   it("extracts output URL from flat image_url field", async () => {
     mockSelect.mockResolvedValue([BASE_RESTORATION]);
-    const req = buildRequest({ body: { image_url: "https://kie.ai/output.png" } });
+    const req = buildRequest({
+      body: { taskId: DEFAULT_TASK_ID, image_url: "https://kie.ai/output.png" },
+    });
     const res = await callPOST(req);
     expect(res.status).toBe(200);
+  });
+
+  it("extracts taskId from data.task_id (kie.ai canonical payload shape)", async () => {
+    mockSelect.mockResolvedValue([BASE_RESTORATION]);
+    // kie.ai sends taskId at top level AND in data.task_id — test the nested path
+    const body = {
+      taskId: DEFAULT_TASK_ID,
+      code: 200,
+      data: { task_id: DEFAULT_TASK_ID, callbackType: "task_completed" },
+      output: { image_url: "https://kie.ai/output.png" },
+    };
+    const req = buildRequest({ body });
+    const res = await callPOST(req);
+    expect(res.status).toBe(200);
+  });
+
+  it("extracts output URL from data.resultJson (canonical kie.ai callback shape)", async () => {
+    mockSelect.mockResolvedValue([BASE_RESTORATION]);
+    // Per docs: resultJson is a JSON-encoded string, not an object
+    const body = {
+      taskId: DEFAULT_TASK_ID,
+      code: 200,
+      data: {
+        task_id: DEFAULT_TASK_ID,
+        state: "success",
+        resultJson: JSON.stringify({ resultUrls: ["https://cdn.kie.ai/output.png"] }),
+        callbackType: "task_completed",
+      },
+    };
+    const req = buildRequest({ body });
+    const res = await callPOST(req);
+    expect(res.status).toBe(200);
+    // Verify fetch was called with the URL from resultUrls[0]
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith("https://cdn.kie.ai/output.png");
   });
 
   // ── Restoration not found ─────────────────────────────────────────────────
@@ -183,6 +270,84 @@ describe("POST /api/webhooks/kie", () => {
     const req = buildRequest();
     const res = await callPOST(req);
     expect(res.status).toBe(404);
+  });
+
+  // ── taskId ↔ kieAiJobId correlation ──────────────────────────────────────
+
+  it("skips (200+skipped) when payload taskId does not match stored kieAiJobId (stale callback)", async () => {
+    // Simulate: DB has kieAiJobId="kie-task-123" but callback arrives with a different taskId
+    // (old task retry that was replaced). Should not mutate the restoration.
+    mockSelect.mockResolvedValue([{ ...BASE_RESTORATION, kieAiJobId: "kie-task-123" }]);
+    const staleTaskId = "kie-task-OLD";
+    const ts = String(Math.floor(Date.now() / 1000));
+    const req = buildRequest({
+      signingTaskId: staleTaskId,
+      timestamp: ts,
+      signature: computeKieSignature(staleTaskId, ts, HMAC_KEY),
+      body: { taskId: staleTaskId, output: { image_url: "https://kie.ai/output.png" } },
+    });
+    const res = await callPOST(req);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { ok: boolean; skipped: boolean };
+    expect(body.skipped).toBe(true);
+    // Must NOT mutate DB or download image
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it("proceeds normally when kieAiJobId is null (job may not have stored it yet)", async () => {
+    mockSelect.mockResolvedValue([{ ...BASE_RESTORATION, kieAiJobId: null }]);
+    mockPut.mockResolvedValue({ url: "https://blob.vercel.com/out.jpg" });
+    const req = buildRequest({ phase: "initial" });
+    const res = await callPOST(req);
+    // kieAiJobId=null means we can't validate — should pass through
+    expect(res.status).toBe(200);
+  });
+
+  it("proceeds normally when kieAiJobId is placeholder sentinel 'pending' (race window)", async () => {
+    // Restore job writes "pending" before storing the real taskId.
+    // If the webhook arrives in that narrow window, we must NOT skip — real callback.
+    mockSelect.mockResolvedValue([{ ...BASE_RESTORATION, kieAiJobId: "pending" }]);
+    mockPut.mockResolvedValue({ url: "https://blob.vercel.com/out.jpg" });
+    const req = buildRequest({ phase: "initial" });
+    const res = await callPOST(req);
+    expect(res.status).toBe(200);
+  });
+
+  it("proceeds normally when kieAiJobId is 'hires-pending' sentinel (hires race window)", async () => {
+    mockSelect.mockResolvedValue([{ ...BASE_RESTORATION, status: "processing", kieAiJobId: "hires-pending" }]);
+    mockPut.mockResolvedValue({ url: "https://blob.vercel.com/hires.jpg" });
+    const req = buildRequest({ phase: "hires" });
+    const res = await callPOST(req);
+    expect(res.status).toBe(200);
+  });
+
+  // ── kie.ai failure callbacks (state=fail) ────────────────────────────────
+
+  it("marks restoration as failed and returns 200 when kie.ai sends state=fail", async () => {
+    mockSelect.mockResolvedValue([BASE_RESTORATION]);
+    const body = {
+      taskId: DEFAULT_TASK_ID,
+      code: 500,
+      data: {
+        task_id: DEFAULT_TASK_ID,
+        state: "fail",
+        failCode: "generation_error",
+        failMsg: "Model inference failed",
+        callbackType: "task_completed",
+      },
+    };
+    const req = buildRequest({ body });
+    const res = await callPOST(req);
+
+    expect(res.status).toBe(200);
+    const resBody = await res.json() as { ok: boolean; failed: boolean };
+    expect(resBody.failed).toBe(true);
+    // DB must be updated to "failed" so the user gets a clear error state
+    expect(mockUpdate).toHaveBeenCalledOnce();
+    // Image download and email must NOT be triggered
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(mockSendEmail).not.toHaveBeenCalled();
   });
 
   // ── phase=initial ─────────────────────────────────────────────────────────
