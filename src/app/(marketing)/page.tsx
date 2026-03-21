@@ -127,10 +127,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   <Button
                     variant="primary"
                     size="lg"
-                    onClick={() => {
-                      // signIn triggers the Google OAuth flow; callbackUrl
-                      // brings them back to / where UploadSection is shown
-                    }}
                     href="/?authPrompt=true"
                     asLink
                   >

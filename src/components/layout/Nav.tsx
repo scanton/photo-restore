@@ -5,7 +5,7 @@ import { signIn, signOut } from "next-auth/react";
 import { useState } from "react";
 
 interface NavSession {
-  user: {
+  user?: {
     id?: string;
     name?: string | null;
     email?: string | null;
