@@ -232,4 +232,20 @@ describe("Nav", () => {
       expect(screen.queryByRole("menu")).toBeNull();
     });
   });
+
+  describe("mobile nav drawer", () => {
+    it("Escape key closes the mobile menu drawer", () => {
+      // Regression: mobile drawer has a keydown Escape handler — verify it fires
+      // Found by pre-landing review on 2026-03-21
+      render(<Nav session={mockSession} />);
+      // Open the mobile menu (jsdom renders all elements regardless of CSS visibility)
+      fireEvent.click(screen.getByRole("button", { name: /open menu/i }));
+      // Drawer is open — role=dialog should be present
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      // Press Escape
+      fireEvent.keyDown(document, { key: "Escape" });
+      // Drawer should be gone
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+  });
 });
