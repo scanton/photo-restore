@@ -203,6 +203,11 @@ export async function POST(req: NextRequest) {
   //     Return 200 so kie.ai does not retry.
   const kieState = (payload.data as Record<string, unknown> | undefined)?.state;
   if (kieState === "fail") {
+    // Idempotency: if already complete (e.g. delayed duplicate fail callback arriving after
+    // a successful hires phase), don't overwrite "complete" with "failed".
+    if (restoration.status === "complete") {
+      return NextResponse.json({ ok: true, skipped: true });
+    }
     const failCode = (payload.data as Record<string, unknown> | undefined)?.failCode ?? "";
     const failMsg = (payload.data as Record<string, unknown> | undefined)?.failMsg ?? "";
     console.error(
