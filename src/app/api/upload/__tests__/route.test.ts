@@ -3,12 +3,10 @@ import type { NextRequest } from "next/server";
 
 // ─── Hoisted mocks ────────────────────────────────────────────────────────────
 
-const { mockPut, mockReturning, mockAuth, mockPublishJSON, mockDbUpdate } = vi.hoisted(() => ({
+const { mockPut, mockReturning, mockAuth } = vi.hoisted(() => ({
   mockPut: vi.fn().mockResolvedValue({ url: "https://blob.vercel.com/test.jpg" }),
   mockReturning: vi.fn().mockResolvedValue([{ id: "restoration-uuid" }]),
   mockAuth: vi.fn().mockResolvedValue(null),
-  mockPublishJSON: vi.fn().mockResolvedValue({}),
-  mockDbUpdate: vi.fn(),
 }));
 
 vi.mock("@vercel/blob", () => ({ put: mockPut }));
@@ -18,21 +16,11 @@ vi.mock("@/lib/db", () => ({
     insert: vi.fn().mockReturnValue({
       values: vi.fn().mockReturnValue({ returning: mockReturning }),
     }),
-    update: vi.fn().mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: mockDbUpdate,
-      }),
-    }),
   },
   restorations: { id: "id" },
 }));
 
 vi.mock("@/lib/auth", () => ({ auth: mockAuth }));
-
-vi.mock("@/lib/qstash", () => ({
-  qstash: { publishJSON: mockPublishJSON },
-  buildFailureCallback: vi.fn().mockReturnValue(undefined),
-}));
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -84,10 +72,8 @@ describe("POST /api/upload", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    // Re-establish mocks cleared by clearAllMocks
     mockPut.mockResolvedValue({ url: "https://blob.vercel.com/test.jpg" });
     mockReturning.mockResolvedValue([{ id: "restoration-uuid" }]);
-    mockPublishJSON.mockResolvedValue({});
     mockAuth.mockResolvedValue(null);
     const { db } = await import("@/lib/db");
     (db.insert as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -151,7 +137,7 @@ describe("POST /api/upload", () => {
     expect(body.error).toMatch(/valid image/i);
   });
 
-  it("accepts a valid JPEG (FF D8 FF) and returns restorationId", async () => {
+  it("accepts a valid JPEG (FF D8 FF) and returns restorationId with status='ready'", async () => {
     const req = buildMockRequest({
       name: "photo.jpg",
       type: "image/jpeg",
@@ -161,7 +147,8 @@ describe("POST /api/upload", () => {
     expect(res.status).toBe(200);
     const body = await res.json() as { restorationId: string; status: string };
     expect(body.restorationId).toBe("restoration-uuid");
-    expect(body.status).toBe("analyzing");
+    // Sprint 4: upload no longer auto-starts the job — status is "ready"
+    expect(body.status).toBe("ready");
   });
 
   it("accepts a valid PNG (89 50 4E 47)", async () => {
@@ -185,19 +172,22 @@ describe("POST /api/upload", () => {
     expect(mockReturning).toHaveBeenCalledOnce();
   });
 
-  it("marks restoration as failed when QStash publish throws", async () => {
-    mockPublishJSON.mockRejectedValue(new Error("QStash unavailable"));
+  // Sprint 4 regression: upload must NOT publish to QStash — the /start endpoint does that.
+  it("does NOT call qstash.publishJSON on successful upload", async () => {
+    const mockPublishJSON = vi.fn();
+    vi.doMock("@/lib/qstash", () => ({
+      qstash: { publishJSON: mockPublishJSON },
+      buildFailureCallback: vi.fn().mockReturnValue(undefined),
+    }));
+
     const req = buildMockRequest({
       name: "photo.jpg",
       type: "image/jpeg",
       buffer: makeJpegBuffer(),
     });
-
     const res = await POST(req);
-    // QStash failure propagates to outer catch → 500
-    expect(res.status).toBe(500);
-    // DB update should have been called to mark as failed (not stuck at "analyzing")
-    expect(mockDbUpdate).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+    expect(mockPublishJSON).not.toHaveBeenCalled();
   });
 
   it("creates restoration with null userId for anonymous uploads", async () => {
