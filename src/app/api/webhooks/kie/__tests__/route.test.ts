@@ -304,6 +304,24 @@ describe("POST /api/webhooks/kie", () => {
     expect(res.status).toBe(200);
   });
 
+  it("proceeds normally when kieAiJobId is placeholder sentinel 'pending' (race window)", async () => {
+    // Restore job writes "pending" before storing the real taskId.
+    // If the webhook arrives in that narrow window, we must NOT skip — real callback.
+    mockSelect.mockResolvedValue([{ ...BASE_RESTORATION, kieAiJobId: "pending" }]);
+    mockPut.mockResolvedValue({ url: "https://blob.vercel.com/out.jpg" });
+    const req = buildRequest({ phase: "initial" });
+    const res = await callPOST(req);
+    expect(res.status).toBe(200);
+  });
+
+  it("proceeds normally when kieAiJobId is 'hires-pending' sentinel (hires race window)", async () => {
+    mockSelect.mockResolvedValue([{ ...BASE_RESTORATION, status: "processing", kieAiJobId: "hires-pending" }]);
+    mockPut.mockResolvedValue({ url: "https://blob.vercel.com/hires.jpg" });
+    const req = buildRequest({ phase: "hires" });
+    const res = await callPOST(req);
+    expect(res.status).toBe(200);
+  });
+
   // ── kie.ai failure callbacks (state=fail) ────────────────────────────────
 
   it("marks restoration as failed and returns 200 when kie.ai sends state=fail", async () => {

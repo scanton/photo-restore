@@ -200,8 +200,16 @@ export async function POST(req: NextRequest) {
   // 5a-pre. Verify taskId matches the stored kieAiJobId (defense-in-depth).
   //   Guards against stale callbacks from an older task (e.g. a retry job replaced the
   //   kieAiJobId with a new task, but the old callback arrived late).
-  //   Skip silently if kieAiJobId is null — the job may not have stored it yet.
-  if (restoration.kieAiJobId && taskId !== restoration.kieAiJobId) {
+  //
+  //   Bypass cases (allow through without checking):
+  //   - kieAiJobId is null — job may not have stored the ID yet
+  //   - kieAiJobId is a placeholder sentinel ("pending" / "hires-pending") — the job
+  //     claimed the slot but hasn't written the real taskId yet (narrow race window).
+  //     The HMAC + URL-embedded restorationId already bind this callback to the right restoration.
+  const PENDING_SENTINELS = new Set(["pending", "hires-pending"]);
+  if (restoration.kieAiJobId &&
+      !PENDING_SENTINELS.has(restoration.kieAiJobId) &&
+      taskId !== restoration.kieAiJobId) {
     console.warn(
       `[kie webhook] taskId mismatch: expected=${restoration.kieAiJobId} got=${taskId} restorationId=${restorationId} — skipping stale callback`
     );
