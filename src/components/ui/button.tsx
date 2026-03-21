@@ -2,16 +2,35 @@
 
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import Link from "next/link";
 import type { ButtonHTMLAttributes } from "react";
 
 type Variant = "primary" | "secondary" | "ghost";
 type Size = "sm" | "md" | "lg";
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonBaseProps {
   variant?: Variant;
   size?: Size;
   loading?: boolean;
+  className?: string;
+  children?: React.ReactNode;
 }
+
+/** Renders as a Next.js <Link> */
+interface ButtonAsLinkProps extends ButtonBaseProps {
+  asLink: true;
+  href: string;
+  onClick?: never;
+  disabled?: never;
+}
+
+/** Renders as a <button> */
+interface ButtonAsButtonProps extends ButtonBaseProps, ButtonHTMLAttributes<HTMLButtonElement> {
+  asLink?: false;
+  href?: never;
+}
+
+type ButtonProps = ButtonAsLinkProps | ButtonAsButtonProps;
 
 const variantClasses: Record<Variant, string> = {
   primary:
@@ -28,58 +47,77 @@ const sizeClasses: Record<Size, string> = {
   lg: "h-12 px-6 text-base gap-2.5 rounded-[8px]",
 };
 
-export function Button({
-  variant = "primary",
-  size = "md",
-  loading = false,
-  disabled,
-  children,
-  className,
-  ...props
-}: ButtonProps) {
+const Spinner = ({ size }: { size: Size }) => (
+  <svg
+    className="animate-spin shrink-0"
+    width={size === "sm" ? 14 : 16}
+    height={size === "sm" ? 14 : 16}
+    viewBox="0 0 16 16"
+    fill="none"
+    aria-hidden="true"
+  >
+    <circle
+      cx="8"
+      cy="8"
+      r="6"
+      stroke="currentColor"
+      strokeOpacity="0.3"
+      strokeWidth="2"
+    />
+    <path
+      d="M14 8a6 6 0 0 0-6-6"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+export function Button(props: ButtonProps) {
+  const {
+    variant = "primary",
+    size = "md",
+    loading = false,
+    children,
+    className,
+    asLink,
+    ...rest
+  } = props;
+
+  const baseClasses = twMerge(
+    clsx(
+      "inline-flex items-center justify-center font-semibold border",
+      "transition-colors duration-[200ms]",
+      "focus-visible:outline-2 focus-visible:outline-[#B5622A] focus-visible:outline-offset-2",
+      variantClasses[variant],
+      sizeClasses[size],
+      className
+    )
+  );
+
+  if (asLink) {
+    const { href } = props as ButtonAsLinkProps;
+    return (
+      <Link href={href} className={baseClasses}>
+        {children}
+      </Link>
+    );
+  }
+
+  const { disabled, onClick, ...buttonRest } = rest as ButtonAsButtonProps;
   const isDisabled = disabled || loading;
 
   return (
     <button
-      {...props}
+      {...buttonRest}
       disabled={isDisabled}
+      onClick={onClick}
       className={twMerge(
-        clsx(
-          "inline-flex items-center justify-center font-semibold border",
-          "transition-colors duration-[200ms]",
-          "focus-visible:outline-2 focus-visible:outline-[#B5622A] focus-visible:outline-offset-2",
-          "disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none",
-          variantClasses[variant],
-          sizeClasses[size],
-          className
-        )
+        baseClasses,
+        "disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
       )}
     >
-      {loading && (
-        <svg
-          className="animate-spin shrink-0"
-          width={size === "sm" ? 14 : 16}
-          height={size === "sm" ? 14 : 16}
-          viewBox="0 0 16 16"
-          fill="none"
-          aria-hidden="true"
-        >
-          <circle
-            cx="8"
-            cy="8"
-            r="6"
-            stroke="currentColor"
-            strokeOpacity="0.3"
-            strokeWidth="2"
-          />
-          <path
-            d="M14 8a6 6 0 0 0-6-6"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        </svg>
-      )}
+      {loading && <Spinner size={size} />}
       {children}
     </button>
   );
