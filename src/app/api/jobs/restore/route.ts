@@ -96,6 +96,7 @@ export async function POST(req: NextRequest) {
 
   // 5. Submit task to kie.ai (async — result comes via /api/webhooks/kie?phase=initial)
   const callBackUrl = buildKieCallbackUrl(restorationId, "initial");
+  console.log("[jobs/restore] callBackUrl:", callBackUrl, "NEXTAUTH_URL:", process.env.NEXTAUTH_URL);
 
   let taskId: string;
   try {
