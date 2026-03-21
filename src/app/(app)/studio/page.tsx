@@ -38,7 +38,7 @@ export default async function StudioPage() {
       >
         <span
           className="text-xs font-semibold uppercase tracking-widest"
-          style={{ color: "#A89380", letterSpacing: "0.08em" }}
+          style={{ color: "#6B5D52", letterSpacing: "0.08em" }}
         >
           Credits
         </span>
@@ -46,8 +46,10 @@ export default async function StudioPage() {
           className="px-2 py-0.5 rounded-full text-xs font-medium"
           style={{
             fontFamily: "var(--font-mono), monospace",
+            // Text colors chosen for ≥4.5:1 contrast against each pill background (WCAG AA).
+            // normal: #6B3B14 on #E8C5A8 = 5.0:1; low: #8B5A1E on #FDF3E7 = 5.3:1; zero: #B83B3B on #FCEAEA = 4.6:1
             backgroundColor: balance === 0 ? "#FCEAEA" : balance <= 1 ? "#FDF3E7" : "#E8C5A8",
-            color: balance === 0 ? "#B83B3B" : balance <= 1 ? "#C17A2A" : "#8A4520",
+            color: balance === 0 ? "#B83B3B" : balance <= 1 ? "#8B5A1E" : "#6B3B14",
             fontVariantNumeric: "tabular-nums",
           }}
           aria-label={`${balance} credit${balance === 1 ? "" : "s"} remaining`}
@@ -57,7 +59,7 @@ export default async function StudioPage() {
         <Link
           href="/billing"
           className="text-xs font-medium ml-1"
-          style={{ color: "#B5622A", textDecoration: "underline", textUnderlineOffset: "2px" }}
+          style={{ color: "#9B5424", textDecoration: "underline", textUnderlineOffset: "2px" }}
         >
           Get more
         </Link>
@@ -68,7 +70,7 @@ export default async function StudioPage() {
         <section className="text-center pt-16 pb-10 px-6">
           <p
             className="text-xs font-semibold uppercase tracking-widest mb-3"
-            style={{ color: "#B5622A", letterSpacing: "0.12em" }}
+            style={{ color: "#9B5424", letterSpacing: "0.12em" }}
           >
             Image Lab
           </p>
@@ -107,7 +109,7 @@ export default async function StudioPage() {
               <Link
                 href="/billing"
                 className="font-semibold ml-auto"
-                style={{ color: "#B5622A" }}
+                style={{ color: "#9B5424" }}
               >
                 Get credits →
               </Link>

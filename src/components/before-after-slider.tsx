@@ -97,13 +97,17 @@ export function BeforeAfterSlider({
       }}
       tabIndex={0}
     >
-      {/* After image (full width, beneath) */}
+      {/* After image (full width, beneath).
+       * h-auto lets the container size to the image's natural dimensions when
+       * no aspect-ratio class is passed by the parent (e.g. restore page).
+       * When a parent does pass aspect-[X/Y], overflow-hidden clips as before.
+       */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={afterSrc}
         alt={afterAlt}
         draggable={false}
-        className="block w-full h-full object-cover"
+        className="block w-full h-auto"
       />
 
       {/* Before image (clipped to left side via clip-path — no DOM measurement needed) */}
@@ -171,7 +175,8 @@ export function BeforeAfterSlider({
         </span>
       </div>
       <div className="absolute bottom-3 right-3 pointer-events-none">
-        <span className="px-2 py-1 rounded-[4px] text-xs font-semibold uppercase tracking-wider bg-[#B5622A] text-[#FAF7F2]">
+        {/* #FAF7F2 on #9B5424 = 5.3:1 — WCAG AA */}
+        <span className="px-2 py-1 rounded-[4px] text-xs font-semibold uppercase tracking-wider bg-[#9B5424] text-[#FAF7F2]">
           {afterLabel}
         </span>
       </div>

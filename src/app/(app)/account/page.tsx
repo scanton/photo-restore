@@ -63,7 +63,7 @@ export default async function AccountPage() {
                 <p className="text-base font-medium" style={{ color: "#1C1410" }}>
                   {session.user.name}
                 </p>
-                <p className="text-sm" style={{ color: "#8A7A6E" }}>
+                <p className="text-sm" style={{ color: "#6B5D52" }}>
                   {session.user.email}
                 </p>
               </div>
@@ -76,7 +76,7 @@ export default async function AccountPage() {
             >
               <p
                 className="text-xs font-semibold uppercase tracking-widest mb-2"
-                style={{ color: "#A89380", letterSpacing: "0.08em" }}
+                style={{ color: "#6B5D52", letterSpacing: "0.08em" }}
               >
                 Credits
               </p>
@@ -90,13 +90,15 @@ export default async function AccountPage() {
               >
                 {balance}
               </p>
-              <p className="text-xs mb-3" style={{ color: "#8A7A6E" }}>
+              {/* #6B5D52 on #F2EDE5 = 5.18:1 — WCAG AA */}
+              <p className="text-xs mb-3" style={{ color: "#6B5D52" }}>
                 {balance === 1 ? "credit remaining" : "credits remaining"}
               </p>
+              {/* #FAF7F2 on #9B5424 = 5.3:1 — WCAG AA */}
               <Link
                 href="/billing"
                 className="block w-full text-center py-2 rounded-[8px] text-sm font-semibold transition-colors duration-150"
-                style={{ backgroundColor: "#B5622A", color: "#FAF7F2" }}
+                style={{ backgroundColor: "#9B5424", color: "#FAF7F2" }}
               >
                 Get more credits
               </Link>
@@ -124,7 +126,7 @@ export default async function AccountPage() {
               <Link
                 href="/"
                 className="text-sm font-semibold px-4 py-2 rounded-[8px] transition-colors duration-150"
-                style={{ backgroundColor: "#B5622A", color: "#FAF7F2" }}
+                style={{ backgroundColor: "#9B5424", color: "#FAF7F2" }}
               >
                 + Restore a photo
               </Link>

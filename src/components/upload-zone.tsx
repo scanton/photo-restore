@@ -144,10 +144,11 @@ export function UploadZone({ onUpload, disabled = false }: UploadZoneProps) {
               <p className="text-base font-semibold text-[#1C1410]">
                 {isDragging ? "Drop your photo here" : "Upload a photo"}
               </p>
-              <p className="mt-1 text-sm text-[#8A7A6E]">
+              {/* #6B5D52 on #F2EDE5 = 5.18:1 — WCAG AA */}
+              <p className="mt-1 text-sm text-[#6B5D52]">
                 Drag and drop, or click to browse
               </p>
-              <p className="mt-1 text-xs text-[#A89380]">
+              <p className="mt-1 text-xs text-[#6B5D52]">
                 JPEG, PNG, WebP, TIFF or HEIC · Max 20 MB
               </p>
             </div>
