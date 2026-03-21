@@ -37,6 +37,18 @@ function isValidImageBuffer(buf: Buffer): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  // Sprint 5: upload requires an authenticated session.
+  // The middleware protects the /restore page but the upload API is a
+  // separate origin — guard it here with a JSON 401 (not a redirect).
+  const session = await auth();
+  const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
+  if (!userId) {
+    return NextResponse.json(
+      { error: "You must be signed in to upload a photo." },
+      { status: 401 }
+    );
+  }
+
   // Parse form data first — req.formData() throws if body is missing or wrong content-type
   let formData: FormData;
   try {
@@ -88,10 +100,6 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-
-    // Get session (optional — anonymous uploads are allowed)
-    const session = await auth();
-    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
 
     // Upload to Vercel Blob
     const blob = await put(`originals/${randomUUID()}-${file.name}`, buffer, {

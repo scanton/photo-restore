@@ -6,7 +6,8 @@ import type { NextRequest } from "next/server";
 const { mockPut, mockReturning, mockAuth } = vi.hoisted(() => ({
   mockPut: vi.fn().mockResolvedValue({ url: "https://blob.vercel.com/test.jpg" }),
   mockReturning: vi.fn().mockResolvedValue([{ id: "restoration-uuid" }]),
-  mockAuth: vi.fn().mockResolvedValue(null),
+  // Sprint 5: upload requires auth — default to authenticated session
+  mockAuth: vi.fn().mockResolvedValue({ user: { id: "user-1" } }),
 }));
 
 vi.mock("@vercel/blob", () => ({ put: mockPut }));
@@ -74,13 +75,31 @@ describe("POST /api/upload", () => {
     vi.clearAllMocks();
     mockPut.mockResolvedValue({ url: "https://blob.vercel.com/test.jpg" });
     mockReturning.mockResolvedValue([{ id: "restoration-uuid" }]);
-    mockAuth.mockResolvedValue(null);
+    // Default: authenticated user
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
     const { db } = await import("@/lib/db");
     (db.insert as ReturnType<typeof vi.fn>).mockReturnValue({
       values: vi.fn().mockReturnValue({ returning: mockReturning }),
     });
     POST = (await import("../route")).POST;
   });
+
+  // ── Sprint 5: authentication guard ──────────────────────────────────────────
+
+  it("returns 401 for unauthenticated requests (Sprint 5 auth-first)", async () => {
+    mockAuth.mockResolvedValue(null);
+    const req = buildMockRequest({
+      name: "photo.jpg",
+      type: "image/jpeg",
+      buffer: makeJpegBuffer(),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+    const body = await res.json() as { error: string };
+    expect(body.error).toMatch(/signed in/i);
+  });
+
+  // ── Validation ───────────────────────────────────────────────────────────────
 
   it("returns 400 when no file is provided", async () => {
     const req = buildMockRequest(null);
@@ -137,6 +156,8 @@ describe("POST /api/upload", () => {
     expect(body.error).toMatch(/valid image/i);
   });
 
+  // ── Successful upload ─────────────────────────────────────────────────────────
+
   it("accepts a valid JPEG (FF D8 FF) and returns restorationId with status='ready'", async () => {
     const req = buildMockRequest({
       name: "photo.jpg",
@@ -190,8 +211,8 @@ describe("POST /api/upload", () => {
     expect(mockPublishJSON).not.toHaveBeenCalled();
   });
 
-  it("creates restoration with null userId for anonymous uploads", async () => {
-    mockAuth.mockResolvedValue(null); // no session = anonymous
+  it("creates restoration with the authenticated user's userId", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-abc" } });
     const { db } = await import("@/lib/db");
     const insertValues = vi.fn().mockReturnValue({ returning: mockReturning });
     (db.insert as ReturnType<typeof vi.fn>).mockReturnValue({ values: insertValues });
@@ -203,7 +224,7 @@ describe("POST /api/upload", () => {
     });
     await POST(req);
     expect(insertValues).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: null })
+      expect.objectContaining({ userId: "user-abc" })
     );
   });
 });

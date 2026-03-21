@@ -4,6 +4,7 @@ import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db";
 import { eq } from "drizzle-orm";
+import { handleSignupBonus } from "@/lib/auth-events";
 
 export const { auth, signIn, signOut, handlers } = NextAuth({
   adapter: DrizzleAdapter(db),
@@ -15,6 +16,18 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
   ],
   session: {
     strategy: "jwt",
+  },
+  events: {
+    /**
+     * Fires on every sign-in (new and returning users).
+     * handleSignupBonus() is idempotent — the unique idempotency key ensures
+     * the 2 credits are only awarded once, ever, per user.
+     */
+    async signIn({ user }) {
+      if (user.id) {
+        await handleSignupBonus(user.id);
+      }
+    },
   },
   callbacks: {
     async session({ session, token }) {
