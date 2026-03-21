@@ -131,6 +131,40 @@ describe("Nav", () => {
     });
   });
 
+  describe("getInitials edge cases", () => {
+    it("renders first+last initials for a long multi-part name (e.g., 'John Paul Getty' → 'JG')", () => {
+      // Regression: getInitials must use parts[0][0] + parts[parts.length - 1][0], not parts[1][0]
+      // A 3-word name must pick the LAST word, not the second word.
+      // Found by /plan-eng-review on 2026-03-21
+      const longNameSession = {
+        user: { id: "u3", name: "John Paul Getty", email: "j@example.com", image: null },
+      };
+      render(<Nav session={longNameSession} />);
+      // First word: "John" → "J", Last word: "Getty" → "G" → initials "JG"
+      expect(screen.getAllByText("JG").length).toBeGreaterThan(0);
+    });
+
+    it("renders first 2 chars for a single-word name (e.g., 'Cher' → 'CH')", () => {
+      // Regression: single-word name must use slice(0,2).toUpperCase(), not parts[1]
+      // Found by /plan-eng-review on 2026-03-21
+      const singleWordSession = {
+        user: { id: "u4", name: "Cher", email: "cher@example.com", image: null },
+      };
+      render(<Nav session={singleWordSession} />);
+      expect(screen.getAllByText("CH").length).toBeGreaterThan(0);
+    });
+
+    it("renders first char of email when user has no name", () => {
+      // Regression: email-only session must fall through to email[0].toUpperCase()
+      // Found by /plan-eng-review on 2026-03-21
+      const emailOnlySession = {
+        user: { id: "u5", name: null, email: "zara@example.com", image: null },
+      };
+      render(<Nav session={emailOnlySession} />);
+      expect(screen.getAllByText("Z").length).toBeGreaterThan(0);
+    });
+  });
+
   describe("avatar dropdown", () => {
     it("renders initials fallback when session.user.image is null", () => {
       render(<Nav session={mockSession} />);
