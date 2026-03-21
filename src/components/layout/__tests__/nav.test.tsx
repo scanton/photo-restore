@@ -144,6 +144,15 @@ describe("Nav", () => {
       expect(avatarImgs.length).toBeGreaterThan(0);
     });
 
+    it("falls back to initials when avatar img fires an error event", () => {
+      render(<Nav session={mockSessionWithImage} />);
+      const avatarImgs = screen.getAllByRole("img", { name: /grace hopper/i });
+      // Fire the error event to simulate a broken image URL
+      fireEvent.error(avatarImgs[0]);
+      // After error, initials "GH" should appear (Grace Hopper)
+      expect(screen.getAllByText("GH").length).toBeGreaterThan(0);
+    });
+
     it("dropdown contains My Account, Studio, and Sign out items in DOM", () => {
       // Dropdown content is rendered into the DOM regardless of open state
       // (it uses useState but re-renders immediately — check by opening it)
