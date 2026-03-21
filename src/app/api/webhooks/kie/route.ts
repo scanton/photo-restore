@@ -187,6 +187,7 @@ export async function POST(req: NextRequest) {
       userId: restorations.userId,
       inputBlobUrl: restorations.inputBlobUrl,
       status: restorations.status,
+      kieAiJobId: restorations.kieAiJobId,
     })
     .from(restorations)
     .where(eq(restorations.id, restorationId))
@@ -194,6 +195,17 @@ export async function POST(req: NextRequest) {
 
   if (!restoration) {
     return NextResponse.json({ error: "Restoration not found" }, { status: 404 });
+  }
+
+  // 5a-pre. Verify taskId matches the stored kieAiJobId (defense-in-depth).
+  //   Guards against stale callbacks from an older task (e.g. a retry job replaced the
+  //   kieAiJobId with a new task, but the old callback arrived late).
+  //   Skip silently if kieAiJobId is null — the job may not have stored it yet.
+  if (restoration.kieAiJobId && taskId !== restoration.kieAiJobId) {
+    console.warn(
+      `[kie webhook] taskId mismatch: expected=${restoration.kieAiJobId} got=${taskId} restorationId=${restorationId} — skipping stale callback`
+    );
+    return NextResponse.json({ ok: true, skipped: true });
   }
 
   // 5a. Handle kie.ai failure notifications BEFORE extracting the output URL.

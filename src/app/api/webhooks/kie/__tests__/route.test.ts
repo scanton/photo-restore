@@ -30,7 +30,7 @@ vi.mock("@/lib/db", () => ({
       }),
     }),
   },
-  restorations: { id: "id", userId: "user_id", inputBlobUrl: "input_blob_url", status: "status" },
+  restorations: { id: "id", userId: "user_id", inputBlobUrl: "input_blob_url", status: "status", kieAiJobId: "kie_ai_job_id" },
 }));
 
 vi.mock("@/lib/watermark", () => ({ burnWatermark: mockBurnWatermark }));
@@ -107,6 +107,7 @@ const BASE_RESTORATION = {
   userId: "user-abc",
   inputBlobUrl: "https://blob.vercel.com/input.jpg",
   status: "analyzing",
+  kieAiJobId: DEFAULT_TASK_ID,
 };
 
 async function callPOST(req: NextRequest) {
@@ -269,6 +270,38 @@ describe("POST /api/webhooks/kie", () => {
     const req = buildRequest();
     const res = await callPOST(req);
     expect(res.status).toBe(404);
+  });
+
+  // ── taskId ↔ kieAiJobId correlation ──────────────────────────────────────
+
+  it("skips (200+skipped) when payload taskId does not match stored kieAiJobId (stale callback)", async () => {
+    // Simulate: DB has kieAiJobId="kie-task-123" but callback arrives with a different taskId
+    // (old task retry that was replaced). Should not mutate the restoration.
+    mockSelect.mockResolvedValue([{ ...BASE_RESTORATION, kieAiJobId: "kie-task-123" }]);
+    const staleTaskId = "kie-task-OLD";
+    const ts = String(Math.floor(Date.now() / 1000));
+    const req = buildRequest({
+      signingTaskId: staleTaskId,
+      timestamp: ts,
+      signature: computeKieSignature(staleTaskId, ts, HMAC_KEY),
+      body: { taskId: staleTaskId, output: { image_url: "https://kie.ai/output.png" } },
+    });
+    const res = await callPOST(req);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { ok: boolean; skipped: boolean };
+    expect(body.skipped).toBe(true);
+    // Must NOT mutate DB or download image
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it("proceeds normally when kieAiJobId is null (job may not have stored it yet)", async () => {
+    mockSelect.mockResolvedValue([{ ...BASE_RESTORATION, kieAiJobId: null }]);
+    mockPut.mockResolvedValue({ url: "https://blob.vercel.com/out.jpg" });
+    const req = buildRequest({ phase: "initial" });
+    const res = await callPOST(req);
+    // kieAiJobId=null means we can't validate — should pass through
+    expect(res.status).toBe(200);
   });
 
   // ── kie.ai failure callbacks (state=fail) ────────────────────────────────
