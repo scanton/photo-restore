@@ -103,25 +103,18 @@ export function BeforeAfterSlider({
         className="block w-full h-full object-cover"
       />
 
-      {/* Before image (clipped to left side) */}
-      <div
-        className="absolute inset-0 overflow-hidden"
-        style={{ width: `${position}%` }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={beforeSrc}
-          alt={beforeAlt}
-          draggable={false}
-          className="block w-full h-full object-cover"
-          style={{
-            width: containerRef.current
-              ? containerRef.current.offsetWidth
-              : "100%",
-            maxWidth: "none",
-          }}
-        />
-      </div>
+      {/* Before image (clipped to left side via clip-path — no DOM measurement needed) */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={beforeSrc}
+        alt={beforeAlt}
+        draggable={false}
+        className="absolute inset-0 block w-full h-full object-cover"
+        style={{
+          clipPath: `inset(0 ${100 - position}% 0 0)`,
+          transition: isDragging ? "none" : "clip-path 600ms cubic-bezier(0.16, 1, 0.3, 1)",
+        }}
+      />
 
       {/* Divider line */}
       <div
