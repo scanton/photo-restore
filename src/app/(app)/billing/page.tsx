@@ -1,18 +1,22 @@
 /**
- * /billing — server component gate.
+ * /billing — public server component.
  *
- * Unauthenticated users are redirected to /api/auth/signin before the client
- * component is ever sent to the browser. This is simpler and more secure than
- * relying on client-side auth checks (which can flash content before redirect).
+ * Previously had an auth gate that redirected unauthenticated users to
+ * /api/auth/signin — this caused a Chrome Safe Browsing false-positive
+ * because the redirect target is a Google OAuth endpoint.
+ *
+ * Now: always renders pricing. Unauthenticated users see a "Sign in" CTA
+ * that calls signIn('google', { callbackUrl: '/billing' }) directly.
+ * Authenticated users see the full billing UI with their current balance.
  */
 import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { getBalance } from "@/lib/credits";
 import BillingClient from "./BillingClient";
 
 export default async function BillingPage() {
   const session = await auth();
-  if (!session?.user) {
-    redirect("/api/auth/signin?callbackUrl=/billing");
-  }
-  return <BillingClient />;
+  const userId = (session?.user as { id?: string } | undefined)?.id;
+  const balance = userId ? await getBalance(userId) : null;
+
+  return <BillingClient session={session ?? null} creditBalance={balance} />;
 }
