@@ -6,6 +6,7 @@ import { BeforeAfterSlider } from "@/components/before-after-slider";
 import { Button } from "@/components/ui/button";
 
 type RestorationStatus =
+  | "ready"
   | "analyzing"
   | "watermarking"
   | "pending_payment"
@@ -24,6 +25,9 @@ interface StatusResponse {
   eraEstimate?: string | null;
   eraConfidence?: number | null;
   creditsCharged: number;
+  guestPurchased: boolean;
+  resolution: Resolution;
+  presetId: string;
 }
 
 // Credit cost per resolution (base × multiplier for standard preset)
@@ -39,6 +43,7 @@ const RESOLUTION_OPTIONS: {
 ];
 
 const STATUS_LABELS: Record<RestorationStatus, string> = {
+  ready: "Ready to restore",
   analyzing: "Analyzing your photo…",
   watermarking: "Preparing preview…",
   pending_payment: "Preview ready",
@@ -46,6 +51,30 @@ const STATUS_LABELS: Record<RestorationStatus, string> = {
   complete: "Restoration complete",
   failed: "Restoration failed",
 };
+
+// 20-message array — cycles every 4s during analyzing/watermarking
+const ROLLING_MESSAGES: string[] = [
+  "Dusting off the years…",
+  "Analyzing light and shadow…",
+  "Recovering lost detail…",
+  "Reconstructing fine grain…",
+  "Enhancing facial features…",
+  "Restoring tonal range…",
+  "Sharpening edges…",
+  "Balancing contrast…",
+  "Clearing blemishes…",
+  "Recovering highlights…",
+  "Deepening the shadows…",
+  "Enhancing textures…",
+  "Matching era-accurate tones…",
+  "Carefully rebuilding…",
+  "Detecting photo era…",
+  "Calibrating color balance…",
+  "Removing artifacts…",
+  "Applying final refinements…",
+  "Almost there…",
+  "Adding finishing touches…",
+];
 
 const POLL_INTERVAL = 2000;
 
@@ -56,8 +85,20 @@ export default function RestorePage() {
   const [data, setData] = useState<StatusResponse | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [purchasing, setPurchasing] = useState(false);
+  const [guestPurchasing, setGuestPurchasing] = useState(false);
   const [resolution, setResolution] = useState<Resolution>("1k");
   const [balance, setBalance] = useState<number | null>(null);
+
+  // Sprint 4: restoration options
+  const [removeFrame, setRemoveFrame] = useState(false);
+  const [colorize, setColorize] = useState(false);
+  const [starting, setStarting] = useState(false);
+
+  // Polling control — set true after /start succeeds, or on mount if already mid-flow
+  const [hasStarted, setHasStarted] = useState(false);
+
+  // Rolling message index (cycles during analyzing/watermarking)
+  const [rollingMsgIdx, setRollingMsgIdx] = useState(0);
 
   // Ref always holds the latest status so the interval callback doesn't capture stale state
   const statusRef = useRef<RestorationStatus | null>(null);
@@ -88,10 +129,28 @@ export default function RestorePage() {
       .catch(() => setBalance(0));
   }, []);
 
-  // Polling — uses statusRef so the interval always sees the current status
-  // without needing data in the dependency array (avoids stale closure + eslint-disable)
+  // Initial fetch on mount — if already mid-flow, enable polling immediately
   useEffect(() => {
-    void fetchStatus();
+    void fetchStatus().then(() => {
+      const s = statusRef.current;
+      if (s && s !== "ready" && s !== "complete" && s !== "failed") {
+        setHasStarted(true);
+      }
+    });
+  }, [fetchStatus]);
+
+  // Detect ?download=success query param (Stripe redirect after guest checkout)
+  useEffect(() => {
+    const search = new URLSearchParams(window.location.search);
+    if (search.get("download") === "success") {
+      window.history.replaceState({}, "", `/restore/${id}`);
+      void fetchStatus();
+    }
+  }, [fetchStatus, id]);
+
+  // Polling — only active after hasStarted is true
+  useEffect(() => {
+    if (!hasStarted) return;
 
     const intervalId = setInterval(() => {
       const current = statusRef.current;
@@ -103,7 +162,45 @@ export default function RestorePage() {
     }, POLL_INTERVAL);
 
     return () => clearInterval(intervalId);
-  }, [fetchStatus]);
+  }, [fetchStatus, hasStarted]);
+
+  // Rolling messages — cycle every 4s when status is analyzing or watermarking
+  useEffect(() => {
+    const s = data?.status;
+    if (s !== "analyzing" && s !== "watermarking") return;
+
+    const id = setInterval(() => {
+      setRollingMsgIdx((i) => (i + 1) % ROLLING_MESSAGES.length);
+    }, 4000);
+
+    return () => clearInterval(id);
+  }, [data?.status]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
+  const handleStart = async () => {
+    setStarting(true);
+    try {
+      const res = await fetch(`/api/restore/${id}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ removeFrame, colorize }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        alert(body.error ?? "Failed to start restoration. Please try again.");
+        return;
+      }
+      // Trigger polling
+      setHasStarted(true);
+      // Optimistically update status to show spinner immediately
+      setData((prev) => prev ? { ...prev, status: "analyzing" } : prev);
+    } catch {
+      alert("Something went wrong. Please try again.");
+    } finally {
+      setStarting(false);
+    }
+  };
 
   const handlePurchase = async () => {
     setPurchasing(true);
@@ -134,6 +231,27 @@ export default function RestorePage() {
     }
   };
 
+  const handleGuestCheckout = async () => {
+    setGuestPurchasing(true);
+    try {
+      const res = await fetch("/api/checkout/create-single", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ restorationId: id }),
+      });
+      const body = await res.json() as { checkoutUrl?: string; error?: string };
+      if (!res.ok || !body.checkoutUrl) {
+        alert(body.error ?? "Something went wrong. Please try again.");
+        return;
+      }
+      window.location.href = body.checkoutUrl;
+    } catch {
+      alert("Something went wrong. Please try again.");
+    } finally {
+      setGuestPurchasing(false);
+    }
+  };
+
   const handleDownload = async () => {
     if (!data?.outputBlobUrl) return;
     const link = document.createElement("a");
@@ -142,7 +260,10 @@ export default function RestorePage() {
     link.click();
   };
 
+  // ── Derived state ─────────────────────────────────────────────────────────
+
   const status = data?.status;
+  const isReady = status === "ready";
   const isProcessing = status === "analyzing" || status === "watermarking" || status === "processing";
   const canPreview = status === "pending_payment" || status === "complete";
   const isFailed = status === "failed";
@@ -251,9 +372,104 @@ export default function RestorePage() {
                 ` (${Math.round(data.eraConfidence * 100)}% confidence)`}
             </p>
           )}
+
+          {/* Rolling message during processing */}
+          {isProcessing && (
+            <p
+              className="text-sm mt-1 transition-opacity duration-500"
+              style={{ color: "#A89380" }}
+            >
+              {ROLLING_MESSAGES[rollingMsgIdx]}
+            </p>
+          )}
         </div>
 
-        {/* Processing state */}
+        {/* ── Ready: options screen ─────────────────────────────── */}
+        {isReady && (
+          <div className="max-w-md">
+            <div
+              className="rounded-[16px] p-8 border"
+              style={{ backgroundColor: "#F2EDE5", borderColor: "#D9CDB8" }}
+            >
+              <h2
+                className="text-xl font-light mb-2"
+                style={{
+                  fontFamily: "var(--font-fraunces), Georgia, serif",
+                  color: "#1C1410",
+                }}
+              >
+                Choose restoration options.
+              </h2>
+              <p className="text-sm mb-6" style={{ color: "#6B5D52" }}>
+                Customize your restoration before we begin. These options are
+                applied at processing time and cannot be changed afterwards.
+              </p>
+
+              {/* Options */}
+              <div className="flex flex-col gap-4 mb-8">
+                {/* Remove Frame */}
+                <label
+                  className="flex items-start gap-3 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={removeFrame}
+                    onChange={(e) => setRemoveFrame(e.target.checked)}
+                    className="mt-0.5 shrink-0"
+                    style={{ accentColor: "#B5622A" }}
+                  />
+                  <div>
+                    <span
+                      className="text-sm font-semibold block"
+                      style={{ color: "#1C1410" }}
+                    >
+                      Remove frame or border
+                    </span>
+                    <span className="text-xs" style={{ color: "#8A7A6E" }}>
+                      Crops out physical frames, decorative borders, or white edges
+                    </span>
+                  </div>
+                </label>
+
+                {/* Colorize */}
+                <label
+                  className="flex items-start gap-3 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={colorize}
+                    onChange={(e) => setColorize(e.target.checked)}
+                    className="mt-0.5 shrink-0"
+                    style={{ accentColor: "#B5622A" }}
+                  />
+                  <div>
+                    <span
+                      className="text-sm font-semibold block"
+                      style={{ color: "#1C1410" }}
+                    >
+                      Colorize
+                    </span>
+                    <span className="text-xs" style={{ color: "#8A7A6E" }}>
+                      Adds natural, period-accurate color to black &amp; white photos
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <Button
+                variant="primary"
+                size="lg"
+                className="w-full"
+                loading={starting}
+                onClick={() => void handleStart()}
+              >
+                Restore this photo
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Processing: spinner + rolling message ─────────────── */}
         {isProcessing && !data?.watermarkedBlobUrl && (
           <div
             className="flex flex-col items-center justify-center py-24 rounded-[16px]"
@@ -292,7 +508,7 @@ export default function RestorePage() {
           </div>
         )}
 
-        {/* Preview / result */}
+        {/* ── Preview / result ──────────────────────────────────── */}
         {canPreview && data && (
           <div className="grid lg:grid-cols-2 gap-12 items-start">
             {/* Image comparison */}
@@ -322,6 +538,7 @@ export default function RestorePage() {
               className="rounded-[16px] p-8"
               style={{ backgroundColor: "#F2EDE5" }}
             >
+              {/* ── pending_payment: guest OR credits CTA ── */}
               {status === "pending_payment" && (() => {
                 const selectedOption = RESOLUTION_OPTIONS.find((o) => o.value === resolution)!;
                 const hasCredits = balance !== null && balance >= selectedOption.credits;
@@ -338,9 +555,41 @@ export default function RestorePage() {
                       Your restoration is ready.
                     </h2>
                     <p className="text-sm mb-6" style={{ color: "#6B5D52" }}>
-                      Choose your output resolution, then unlock to download,
-                      print, and keep forever.
+                      Unlock the full-resolution download, or use credits for
+                      higher output quality.
                     </p>
+
+                    {/* $0.99 guest download — no account required */}
+                    <div
+                      className="mb-5 rounded-[12px] p-4 border"
+                      style={{ backgroundColor: "#FAF7F2", borderColor: "#D9CDB8" }}
+                    >
+                      <p
+                        className="text-sm font-semibold mb-1"
+                        style={{ color: "#1C1410" }}
+                      >
+                        Quick download — no account needed
+                      </p>
+                      <p className="text-xs mb-3" style={{ color: "#8A7A6E" }}>
+                        Standard resolution (1K) · Download once · $0.99
+                      </p>
+                      <Button
+                        variant="primary"
+                        size="md"
+                        className="w-full"
+                        loading={guestPurchasing}
+                        onClick={() => void handleGuestCheckout()}
+                      >
+                        Pay $0.99 — download now
+                      </Button>
+                    </div>
+
+                    {/* Divider */}
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="flex-1 h-px" style={{ backgroundColor: "#D9CDB8" }} />
+                      <span className="text-xs" style={{ color: "#A89380" }}>or use credits</span>
+                      <div className="flex-1 h-px" style={{ backgroundColor: "#D9CDB8" }} />
+                    </div>
 
                     {/* Resolution picker */}
                     <div className="mb-5">
@@ -405,33 +654,36 @@ export default function RestorePage() {
                       </p>
                     )}
 
-                    {/* Primary CTA: Use Credits */}
+                    {/* Use Credits CTA */}
                     <Button
-                      variant="primary"
-                      size="lg"
+                      variant="secondary"
+                      size="md"
                       className="w-full"
                       loading={purchasing}
                       disabled={!hasCredits}
                       onClick={() => void handlePurchase()}
                     >
-                      Use {selectedOption.credits} credit{selectedOption.credits !== 1 ? "s" : ""} — download
+                      Use {selectedOption.credits} credit{selectedOption.credits !== 1 ? "s" : ""}
                     </Button>
 
-                    {/* Secondary CTA: Buy Credits */}
-                    <div className="mt-3">
-                      <Button
-                        variant="secondary"
-                        size="md"
-                        className="w-full"
-                        onClick={() => (window.location.href = "/billing")}
-                      >
-                        {hasCredits ? "Buy more credits" : "Buy credits to continue →"}
-                      </Button>
-                    </div>
+                    {/* Buy credits link */}
+                    {!hasCredits && (
+                      <div className="mt-3">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="w-full"
+                          onClick={() => (window.location.href = "/billing")}
+                        >
+                          Buy credits →
+                        </Button>
+                      </div>
+                    )}
                   </>
                 );
               })()}
 
+              {/* ── complete: download CTA ── */}
               {isComplete && (
                 <>
                   <h2
@@ -444,7 +696,10 @@ export default function RestorePage() {
                     Download your photo.
                   </h2>
                   <p className="text-sm mb-6" style={{ color: "#6B5D52" }}>
-                    Your restored photo is ready in full resolution.
+                    Your restored photo is ready.
+                    {data.guestPurchased
+                      ? " Thank you for your purchase."
+                      : " Full resolution, ready to print and keep."}
                   </p>
 
                   <Button
@@ -453,7 +708,7 @@ export default function RestorePage() {
                     className="w-full"
                     onClick={() => void handleDownload()}
                   >
-                    Download full resolution
+                    Download restored photo
                   </Button>
 
                   <div className="mt-4">
@@ -472,7 +727,7 @@ export default function RestorePage() {
           </div>
         )}
 
-        {/* Failed state */}
+        {/* ── Failed state ──────────────────────────────────────── */}
         {isFailed && (
           <div
             className="flex flex-col items-center justify-center py-16 rounded-[16px]"
