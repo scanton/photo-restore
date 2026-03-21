@@ -2,6 +2,27 @@
 
 All notable changes to PicRenew will be documented in this file.
 
+## [0.3.4.0] - 2026-03-21
+
+### Added
+- **$0.99 guest checkout** — download any restored photo for $0.99 without creating an account. `POST /api/checkout/create-single` creates a Stripe Checkout session with `customer_creation: "always"`; the webhook handler sets `guestPurchased=true`, `status="complete"`, and stores the guest email from `customer_details`. No credits are awarded — this is a one-time download, not a credit purchase.
+- **Options screen on the restore page** — before starting restoration, users can toggle "Remove frame/border" and "Colorize (B&W → color)". Selections are stored on the restoration record and applied to the kie.ai prompt via `buildPrompt()`.
+- **Rolling status messages** — 20 curated messages cycle every 4 seconds during restoration ("Examining grain and texture…", "Working on the shadows…", etc.), replacing the static spinner.
+- **`POST /api/restore/[id]/start`** — new endpoint that atomically claims a `"ready"` restoration (prevents race-condition double-starts) and publishes the QStash job. Upload no longer auto-publishes; the user explicitly starts restoration after reviewing the options.
+- **3-state download CTA** — after a restore, authenticated users see the credit-based resolution picker, guests see the $0.99 panel, and after a guest purchase users see the download button directly with a "higher resolution" upsell hint.
+- **Billing page server auth gate** — `billing/page.tsx` is now a server component; unauthenticated users are redirected to sign-in before seeing any pricing.
+- **Billing UX polish** — subscriptions appear above credit packs; annual pricing is the default tab; each credit pack card shows a plain-English description of what the credits buy (e.g. "10 credits — restore 10 photos at 1K, or 5 at 2K, or 3 at 4K"); all 8 products have icons (`public/icons/`).
+- **`SINGLE_DOWNLOAD` product** — added to `src/lib/products.ts` with `isSingleDownload()` type guard; `VALID_PRICE_IDS` now has 8 entries. `POST /api/checkout/create` rejects `single_download` priceIds to avoid TypeScript union errors.
+- **Schema additions** — `"ready"` added to `restorationStatusEnum` (new default), `removeFrame` (bool), `colorize` (bool), `guestPurchased` (bool), `guestEmail` (text) columns on `restorations`.
+
+### Changed
+- **Upload route** (`POST /api/upload`) — no longer auto-publishes to QStash after upload. Returns `status: "ready"` and waits for the user to trigger `POST /api/restore/[id]/start`.
+- **Status endpoint** (`GET /api/restore/[id]/status`) — now exposes `guestPurchased`, `resolution`, and `presetId` for the restore page CTA logic.
+- **`jobs/restore`** — SELECT expanded to include `removeFrame`, `colorize`, `presetId`. `buildPrompt(basePrompt, removeFrame, colorize)` is now an exported pure function.
+
+### For contributors
+- 200 tests across 17 test files (+22 from Sprint 3). New: `start/__tests__/route.test.ts` (18), `buildPrompt.test.ts` (4), `checkout/create-single/__tests__/route.test.ts` (11), extended `webhooks/stripe/__tests__/route.test.ts` (+12 single_download cases), updated `upload/__tests__/route.test.ts` (removes QStash publish assertions).
+
 ## [0.3.3.0] - 2026-03-20
 
 ### Security

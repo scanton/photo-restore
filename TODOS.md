@@ -26,53 +26,6 @@
 
 ---
 
-### Billing Page: Show Subscriptions First, One-Time Packs Second
-**What:** Reorder the `/billing` page so subscription plans appear above one-time credit packs. Default to the Annual tab (shows lower monthly price).
-**Why:** Subscriptions are higher LTV; showing them first anchors the pricing conversation on recurring value. Annual default shows the lowest price point (e.g. $8.99/mo vs $9.99/mo) which improves conversion.
-**Pros:** Higher LTV per acquired user; better pricing anchoring.
-**Cons:** One-time buyers may take slightly longer to find their section.
-**Context:** Observed (2026-03-20). Current order: Credit Packs (one-time) → Subscriptions. Toggle defaults to Monthly. Invert both.
-**Effort:** XS (human: ~30 min / CC: ~5 min)
-**Priority:** P1
-**Depends on:** —
-
----
-
-### Billing Page: Describe What Each Credit Pack Gets You
-**What:** Add a plain-English description to each credit pack card explaining how many restorations it enables at each resolution tier. E.g. "10 credits — restore 10 photos at 1K, or 5 photos at 2K, or 3 photos at 4K."
-**Why:** Users don't intuitively know what "1 credit" means. Concrete restoration counts make the value proposition tangible and reduce purchase hesitation.
-**Pros:** Reduces friction; increases conversion; sets correct expectations.
-**Cons:** Copy needs updating if credit costs change.
-**Context:** Observed (2026-03-20). Currently cards just show "10 credits / $4.99 one-time" with no explanation of what the credits buy. Copy should reference the resolution tiers (1K = 1cr, 2K = 2cr, 4K = 3cr) as shown on the restore page.
-**Effort:** XS (human: ~30 min / CC: ~5 min)
-**Priority:** P1
-**Depends on:** —
-
----
-
-### Billing Page: Product Icons
-**What:** Add an icon/illustration to each billing card (Starter Pack, Power Pack, Value Pack, Hobbyist, Professional). Icons are available in `public/icons/` — wire them up to the corresponding product cards.
-**Why:** Icons make the pricing cards feel more differentiated and premium, consistent with the Refined Artisan design system.
-**Pros:** Visual polish; brand consistency.
-**Cons:** —
-**Context:** Icon assets will be dropped into `public/icons/` manually. Map file names to product slugs when implementing.
-**Effort:** XS (human: ~30 min / CC: ~5 min)
-**Priority:** P1
-**Depends on:** Icon files dropped into `public/icons/`
-
----
-
-### One-Time $0.99 Single-Image Download Option
-**What:** Add a "Just download this one — $0.99" option on the restore page for users who don't want to buy a credit pack. This is a single-use purchase that grants a 1K download of the current restoration only, no credits added to the account.
-**Why:** There is a segment of users who will pay for their one photo but won't commit to a 10-credit pack. $0.99 captures that revenue instead of losing it to churn.
-**Pros:** Captures bottom-of-funnel users; extremely low friction; higher conversion at lower price point.
-**Cons:** Lower LTV per user; need a dedicated Stripe product (one-time, $0.99); need a new purchase flow that doesn't credit the account.
-**Context:** Identified (2026-03-20). Requires: (1) create a $0.99 Stripe product in the Stripe dashboard; (2) add the product to `src/lib/products.ts`; (3) add a `POST /api/checkout/create-single` endpoint or extend the existing one with a `type: "single"` flag; (4) add a "Just download this one — $0.99" CTA on the restore page below "Buy credits to continue".
-**Effort:** S (human: ~1 day / CC: ~15 min)
-**Priority:** P1
-**Depends on:** Stripe $0.99 single-download product created in dashboard first
-
----
 
 ## P2 — Post-Launch
 
@@ -197,6 +150,13 @@
 ---
 
 ## Completed
+
+### Sprint 4 — Billing UX, $0.99 Guest Checkout, Options Screen (2026-03-21)
+**Completed:** Sprint 4 (2026-03-21)
+
+Four P1 items shipped together: (1) **Billing page reordered** — subscriptions now appear above credit packs; annual pricing is the default tab, showing the lowest monthly price; (2) **Pack descriptions** — each credit pack card now explains what the credits buy in plain English ("10 credits — restore 10 photos at 1K, or 5 at 2K, or 3 at 4K"); (3) **Product icons** — 8 PNGs wired to all billing cards (`public/icons/`); (4) **$0.99 guest checkout** — `POST /api/checkout/create-single` + `handleSingleDownloadCompleted()` Stripe webhook handler + restore page CTA. Billing page is now a server component with an auth gate. 200 tests passing.
+
+---
 
 ### kie.ai Webhook Security + Failure Handling
 **Completed:** feat/restoration-pipeline (2026-03-20)

@@ -13,6 +13,7 @@ Built for the person at 45 dealing with a box of their parents' photos. Not a te
 - **AI era estimation** — the app identifies the approximate decade a photo was taken and suggests the right restoration preset automatically
 - **Gift a restoration** — buy a restored photo as a gift; the recipient gets an email with a one-click download link, no account required
 - **Batch processing** — upload up to 10 photos at once; they process in parallel and arrive as a zip download
+- **$0.99 guest checkout** — download a single restoration for $0.99 without creating an account; credits optional
 - **Credit packs & subscriptions** — pay per restoration or subscribe for a monthly credit allowance
 - **Admin dashboard** — restorations per day, revenue, preset popularity, failed job log
 
@@ -82,7 +83,7 @@ npm run dev
 
 ```bash
 # Run tests
-npm run test           # Vitest unit/integration (178 tests)
+npm run test           # Vitest unit/integration (200 tests)
 ```
 
 ---
@@ -112,6 +113,6 @@ Available skills: `/browse`, `/plan-ceo-review`, `/plan-eng-review`, `/design-co
 
 ## Status
 
-**v0.3.3.0 — Webhook security hardened and failure handling complete.**
+**v0.3.4.0 — Sprint 4: options screen, $0.99 guest checkout, and billing UX.**
 
-Full HMAC-SHA256 webhook authentication (kie.ai canonical approach), replay attack prevention, stale callback detection, kie.ai failure callback handling (no more permanently stuck restorations), and inner code validation. 178 tests passing. Ready for real users.
+Users can now toggle "Remove frame" and "Colorize" before restoring. A $0.99 guest checkout lets anyone download a single photo without creating an account. The billing page shows subscriptions first with annual pricing as default, product icons on every card, and plain-English credit pack descriptions. 200 tests passing.
