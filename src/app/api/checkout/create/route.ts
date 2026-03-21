@@ -3,7 +3,7 @@ import Stripe from "stripe";
 import { db, users } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { getProductByPriceId, isCreditPack, VALID_PRICE_IDS } from "@/lib/products";
+import { getProductByPriceId, isCreditPack, isSingleDownload, VALID_PRICE_IDS } from "@/lib/products";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -38,6 +38,10 @@ export async function POST(req: NextRequest) {
   }
 
   const product = getProductByPriceId(priceId)!;
+  // single_download is guest-only — it goes through /api/checkout/create-single, not here
+  if (isSingleDownload(product)) {
+    return NextResponse.json({ error: "Unknown priceId." }, { status: 400 });
+  }
   const credits = isCreditPack(product)
     ? product.credits
     : product.creditsPerMonth;
