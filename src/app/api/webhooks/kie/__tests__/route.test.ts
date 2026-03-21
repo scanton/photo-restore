@@ -42,7 +42,6 @@ vi.mock("@/lib/email/send", () => ({ sendRestorationReadyEmail: mockSendEmail })
 import { createHmac } from "crypto";
 
 const HMAC_KEY = "test-webhook-hmac-key-from-kie-ai-settings";
-const FIXED_TIMESTAMP = "1234567890";
 const DEFAULT_TASK_ID = "kie-task-123";
 
 process.env.KIE_WEBHOOK_HMAC_KEY = HMAC_KEY;
@@ -73,7 +72,8 @@ function buildRequest(
     output: { image_url: "https://kie.ai/output.png" },
   };
 
-  const timestamp = opts.timestamp === null ? "" : (opts.timestamp ?? FIXED_TIMESTAMP);
+  // Default to current time so the ±5 min replay window passes in tests
+  const timestamp = opts.timestamp === null ? "" : (opts.timestamp ?? String(Math.floor(Date.now() / 1000)));
   const signingTaskId = opts.signingTaskId ?? DEFAULT_TASK_ID;
   const signature =
     opts.signature === null
@@ -160,7 +160,24 @@ describe("POST /api/webhooks/kie", () => {
   });
 
   it("returns 401 when signature is computed with wrong key", async () => {
-    const req = buildRequest({ signature: computeKieSignature(DEFAULT_TASK_ID, FIXED_TIMESTAMP, "wrong-key") });
+    const ts = String(Math.floor(Date.now() / 1000));
+    const req = buildRequest({ signature: computeKieSignature(DEFAULT_TASK_ID, ts, "wrong-key"), timestamp: ts });
+    const res = await callPOST(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 when timestamp is more than 5 minutes old (replay attack prevention)", async () => {
+    const oldTimestamp = String(Math.floor(Date.now() / 1000) - 360); // 6 minutes ago
+    const req = buildRequest({
+      timestamp: oldTimestamp,
+      signature: computeKieSignature(DEFAULT_TASK_ID, oldTimestamp, HMAC_KEY),
+    });
+    const res = await callPOST(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 when timestamp is not a valid number", async () => {
+    const req = buildRequest({ timestamp: "not-a-timestamp" });
     const res = await callPOST(req);
     expect(res.status).toBe(401);
   });
@@ -252,6 +269,34 @@ describe("POST /api/webhooks/kie", () => {
     const req = buildRequest();
     const res = await callPOST(req);
     expect(res.status).toBe(404);
+  });
+
+  // ── kie.ai failure callbacks (state=fail) ────────────────────────────────
+
+  it("marks restoration as failed and returns 200 when kie.ai sends state=fail", async () => {
+    mockSelect.mockResolvedValue([BASE_RESTORATION]);
+    const body = {
+      taskId: DEFAULT_TASK_ID,
+      code: 500,
+      data: {
+        task_id: DEFAULT_TASK_ID,
+        state: "fail",
+        failCode: "generation_error",
+        failMsg: "Model inference failed",
+        callbackType: "task_completed",
+      },
+    };
+    const req = buildRequest({ body });
+    const res = await callPOST(req);
+
+    expect(res.status).toBe(200);
+    const resBody = await res.json() as { ok: boolean; failed: boolean };
+    expect(resBody.failed).toBe(true);
+    // DB must be updated to "failed" so the user gets a clear error state
+    expect(mockUpdate).toHaveBeenCalledOnce();
+    // Image download and email must NOT be triggered
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(mockSendEmail).not.toHaveBeenCalled();
   });
 
   // ── phase=initial ─────────────────────────────────────────────────────────

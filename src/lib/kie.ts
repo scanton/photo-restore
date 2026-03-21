@@ -9,8 +9,8 @@
  * Confirmed response shape (tested 2026-03-20):
  *   { code: 200, msg: "success", data: { taskId: string, recordId: string } }
  *
- * NOTE: The kie.ai callback payload shape is still unknown — see /api/webhooks/kie
- * for instrumentation that logs the first real callback for discovery.
+ * Callback payload shape confirmed — see docs/kie/README.md for full reference.
+ * Key: data.resultJson is a JSON-encoded string containing { resultUrls: [url] }.
  */
 
 const KIE_BASE_URL = process.env.KIE_AI_BASE_URL ?? "https://api.kie.ai";
@@ -73,6 +73,15 @@ export async function createKieTask(
     msg: string;
     data: { taskId: string; recordId: string };
   };
+
+  // kie.ai uses an inner `code` field even on HTTP 200 responses — validate it.
+  // HTTP 200 with code: 402 means insufficient credits; code: 429 means rate-limited, etc.
+  // Throw so the QStash job returns 500 and triggers a retry (for transient errors).
+  if (json.code !== 200) {
+    throw new Error(
+      `kie.ai task creation failed: code=${json.code} msg=${json.msg}`
+    );
+  }
 
   return { taskId: json.data.taskId };
 }

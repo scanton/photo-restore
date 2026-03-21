@@ -121,8 +121,6 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. Parse body early — taskId from the payload is required to compute the HMAC signature.
-  //    Algorithm (per kie.ai docs): base64(HMAC-SHA256(taskId + "." + timestamp, hmacKey))
-  //    See: https://docs.kie.ai/common-api/webhook-verification.md
   let payload: Record<string, unknown>;
   try {
     payload = (await req.json()) as Record<string, unknown>;
@@ -136,7 +134,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing task_id in payload" }, { status: 400 });
   }
 
-  // 3. Compute expected signature and compare constant-time (prevents timing attacks)
+  // 3. Reject stale timestamps to prevent replay attacks (industry standard: ±5 min window).
+  //    A replayed payload can only affect the specific restorationId in the URL, but
+  //    rejecting it early is cheap and correct.
+  const tsSeconds = parseInt(timestamp, 10);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (isNaN(tsSeconds) || Math.abs(nowSeconds - tsSeconds) > 300) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // 4. Compute expected signature and compare constant-time (prevents timing attacks).
+  //    Algorithm (per kie.ai docs): base64(HMAC-SHA256(taskId + "." + timestamp, hmacKey))
+  //    See: https://docs.kie.ai/common-api/webhook-verification.md
   const hmacKey = process.env.KIE_WEBHOOK_HMAC_KEY ?? "";
   const computedSignature = createHmac("sha256", hmacKey)
     .update(`${taskId}.${timestamp}`)
@@ -171,19 +180,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 4. Extract output image URL from payload
-  const outputUrl = extractOutputUrl(payload);
-  if (!outputUrl) {
-    console.error(
-      "[kie webhook] Could not find output URL in payload:",
-      JSON.stringify(payload)
-    );
-    return NextResponse.json(
-      { error: "Output URL not found in kie.ai callback payload" },
-      { status: 422 }
-    );
-  }
-
   // 5. Load restoration
   const [restoration] = await db
     .select({
@@ -200,14 +196,46 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Restoration not found" }, { status: 404 });
   }
 
-  // 5a. Idempotency fast-path for phase=hires: if already complete, skip BEFORE downloading
+  // 5a. Handle kie.ai failure notifications BEFORE extracting the output URL.
+  //     data.state = "fail" means generation failed on kie.ai's side (insufficient credits,
+  //     model error, etc.). Failure payloads have no output URL — checking extractOutputUrl
+  //     first would return 422 and leave the restoration permanently stuck at "analyzing".
+  //     Return 200 so kie.ai does not retry.
+  const kieState = (payload.data as Record<string, unknown> | undefined)?.state;
+  if (kieState === "fail") {
+    const failCode = (payload.data as Record<string, unknown> | undefined)?.failCode ?? "";
+    const failMsg = (payload.data as Record<string, unknown> | undefined)?.failMsg ?? "";
+    console.error(
+      `[kie webhook] Task failed: restorationId=${restorationId} failCode=${failCode} failMsg=${failMsg}`
+    );
+    await db
+      .update(restorations)
+      .set({ status: "failed" })
+      .where(eq(restorations.id, restorationId));
+    return NextResponse.json({ ok: true, failed: true });
+  }
+
+  // 5b. Extract output image URL from payload (only for successful callbacks)
+  const outputUrl = extractOutputUrl(payload);
+  if (!outputUrl) {
+    console.error(
+      "[kie webhook] Could not find output URL in payload:",
+      JSON.stringify(payload)
+    );
+    return NextResponse.json(
+      { error: "Output URL not found in kie.ai callback payload" },
+      { status: 422 }
+    );
+  }
+
+  // 5c. Idempotency fast-path for phase=hires: if already complete, skip BEFORE downloading
   //     the image. Without this check here, a duplicate kie.ai callback would download the
   //     full image buffer unnecessarily before discovering it can skip.
   if (phase === "hires" && restoration.status === "complete") {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  // 5. Download kie.ai output image
+  // 6. Download kie.ai output image
   let outputBuffer: Buffer;
   try {
     const imageRes = await fetch(outputUrl);
