@@ -76,6 +76,18 @@
 
 ## P2 — Post-Launch
 
+### Guest Resolution Upgrade Path ($0.99 → 2K/4K Upsell)
+**What:** After a guest downloads their $0.99 1K restoration, give them a path to upgrade to 2K or 4K without losing their restoration. Flow: "Want higher resolution? Create an account → buy a credit pack → hi-res restoration fires for the same restorationId."
+**Why:** The $0.99 buyer is the warmest possible lead for a credit pack upgrade — they've already paid, they've already seen their result, and they care about this specific photo. This is the highest-intent upsell moment in the product.
+**Pros:** Converts the lowest-friction entry point (guest $0.99) into the highest-LTV path (subscription or pack). No new cold acquisition needed.
+**Cons:** Requires linking an anonymous restoration to a newly-created user account after the fact; the restorationId → userId backfill is non-trivial and must not break existing access controls.
+**Context:** Identified during /plan-eng-review (2026-03-21). Sprint 4 adds a placeholder copy line below the download button ("Want higher resolution? Create an account to unlock 2K and 4K") but does not implement the actual upgrade flow. The restorationId is preserved in the session — the upgrade flow needs to associate it with the new user account at account-creation time. Do NOT overwrite userId on an existing guest restoration without a careful migration — it would lock the guest out of their existing URL.
+**Effort:** S (human: ~1 day / CC: ~15 min)
+**Priority:** P2
+**Depends on:** Stable guest checkout flow (Sprint 4); account creation flow in place
+
+---
+
 ### Physical Print Ordering Integration
 **What:** After download, CTA to order the restored photo as a print, canvas, or photo book page via Printful or Prodigi API.
 **Why:** Purchase intent peaks right at the download moment. High-margin, zero-inventory revenue stream. Each physical product is a brand advertisement with the logo on the back.
@@ -121,6 +133,18 @@
 **Effort:** S (human: ~1 day / CC: ~15 min)
 **Priority:** P2
 **Depends on:** Stable email flow for authenticated users (completed in restoration pipeline PR)
+
+---
+
+### Rate Limiting on Public API Endpoints
+**What:** Add rate limiting to `POST /api/checkout/create-single` and `POST /api/restore/[id]/start` — both are intentionally public (no auth required) and currently have no abuse protection.
+**Why:** A bad actor could spam `create-single` to generate hundreds of Stripe Checkout sessions (no charge until they pay, but clutters the Stripe dashboard and wastes DB writes). `start` could be used to repeatedly trigger kie.ai restoration jobs using someone else's restorationId URL.
+**Pros:** Protects Stripe dashboard cleanliness; prevents unauthorized compute burn on kie.ai at scale; standard production hygiene for public endpoints.
+**Cons:** Rate limiting adds complexity (Redis or edge config); for 5–10 users this weekend, it's premature. Revisit when traffic is measurable.
+**Context:** Identified during /plan-eng-review (2026-03-21). Both endpoints are intentionally unauthenticated by design (zero-friction is the value prop). Rate limiting should be added at the edge (Vercel middleware or Upstash ratelimit) rather than at the endpoint level. Implement as: N requests per IP per minute, with a clear `429 Too Many Requests` response.
+**Effort:** XS (human: ~2 hrs / CC: ~5 min)
+**Priority:** P3
+**Depends on:** Meaningful traffic in production to set realistic rate limits
 
 ---
 
