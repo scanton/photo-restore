@@ -42,6 +42,7 @@ vi.mock("@/lib/db", () => ({
   },
   users: { id: "id", stripeCustomerId: "stripe_customer_id" },
   subscriptions: { id: "id", stripeSubscriptionId: "stripe_subscription_id" },
+  restorations: { id: "id" },
   eq: vi.fn((col: unknown, val: unknown) => ({ col, val })),
 }));
 
@@ -194,6 +195,96 @@ describe("POST /api/webhooks/stripe", () => {
     const res = await callPOST("{}", "valid-sig");
     expect(res.status).toBe(200);
     expect(mockAwardCredits).not.toHaveBeenCalled();
+  });
+
+  // ── Sprint 4: single_download checkout handling ───────────────────────────
+  // Test 4: sets guestPurchased=true, does NOT call awardCredits
+  // Test 8: skips DB update when payment_status !== "paid"
+
+  describe("single_download checkout.session.completed", () => {
+    function buildSingleDownloadEvent(
+      paymentStatus = "paid",
+      restorationId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    ) {
+      return {
+        type: "checkout.session.completed",
+        data: {
+          object: {
+            id: "cs_guest_123",
+            payment_status: paymentStatus,
+            customer: "cus_guest",
+            customer_details: { email: "guest@example.com" },
+            metadata: {
+              type: "single_download",
+              restorationId,
+            },
+          },
+        },
+      };
+    }
+
+    // Test 4
+    it("sets guestPurchased=true and status='complete' without awarding credits", async () => {
+      mockConstructEvent.mockReturnValue(buildSingleDownloadEvent());
+
+      const res = await callPOST("{}", "valid-sig");
+      expect(res.status).toBe(200);
+
+      // Must update restoration
+      const { db } = await import("@/lib/db");
+      expect(db.update).toHaveBeenCalled();
+      const setMock = (db.update as ReturnType<typeof vi.fn>).mock.results[0]?.value?.set as ReturnType<typeof vi.fn>;
+      expect(setMock).toHaveBeenCalledWith(
+        expect.objectContaining({ guestPurchased: true, status: "complete" })
+      );
+
+      // Must NOT award credits
+      expect(mockAwardCredits).not.toHaveBeenCalled();
+    });
+
+    it("stores the guest email from customer_details", async () => {
+      mockConstructEvent.mockReturnValue(buildSingleDownloadEvent());
+
+      await callPOST("{}", "valid-sig");
+
+      const { db } = await import("@/lib/db");
+      const setMock = (db.update as ReturnType<typeof vi.fn>).mock.results[0]?.value?.set as ReturnType<typeof vi.fn>;
+      expect(setMock).toHaveBeenCalledWith(
+        expect.objectContaining({ guestEmail: "guest@example.com" })
+      );
+    });
+
+    // Test 8
+    it("skips DB update when payment_status is not 'paid'", async () => {
+      mockConstructEvent.mockReturnValue(buildSingleDownloadEvent("unpaid"));
+
+      const res = await callPOST("{}", "valid-sig");
+      expect(res.status).toBe(200); // still 200 — we acknowledge the event
+
+      const { db } = await import("@/lib/db");
+      expect(db.update).not.toHaveBeenCalled();
+      expect(mockAwardCredits).not.toHaveBeenCalled();
+    });
+
+    it("skips DB update when restorationId is missing from metadata", async () => {
+      mockConstructEvent.mockReturnValue({
+        type: "checkout.session.completed",
+        data: {
+          object: {
+            id: "cs_no_restoration",
+            payment_status: "paid",
+            customer: "cus_guest",
+            customer_details: { email: "guest@example.com" },
+            metadata: { type: "single_download" }, // no restorationId
+          },
+        },
+      });
+
+      const res = await callPOST("{}", "valid-sig");
+      expect(res.status).toBe(200);
+      const { db } = await import("@/lib/db");
+      expect(db.update).not.toHaveBeenCalled();
+    });
   });
 
   // ── invoice.payment_succeeded ─────────────────────────────────────────────
