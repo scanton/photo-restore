@@ -50,6 +50,18 @@
 
 ---
 
+### kie.ai Webhook HMAC Verification
+**What:** Verify kie.ai's outbound `X-Webhook-Hmac-Key` (or equivalent) request header in `POST /api/webhooks/kie`, in addition to our current query-param secret.
+**Why:** Right now we authenticate kie.ai callbacks by embedding our own secret in the callback URL (`?secret=...`). This works, but the secret lives in the URL — which means it appears in server access logs, kie.ai's own request logs, and any proxy/CDN logs. kie.ai's Webhook HMAC Key (visible in their Settings → Webhook HMAC Key) is the key they include in every outbound webhook request header, designed exactly to solve this. Verifying that header is the correct security model.
+**Current state:** `KIE_WEBHOOK_SECRET` (our query-param secret) is set in Vercel and works. kie.ai's Webhook HMAC Key has been recorded but is not verified anywhere in our code. The kie.ai dashboard shows it as "This key is used to verify webhook requests. It will be included in the request headers when calling your webhook URL."
+**Risk if deferred:** Low in the short term — our URL secret still provides authentication. The real risk is if kie.ai's HMAC key rotates (e.g., via their "Reset Key" button) or if a URL-embedded secret is logged somewhere sensitive. Not a critical gap but should be addressed before scale.
+**Action:** (1) Check kie.ai docs/headers for the exact header name they send the HMAC key in (likely `x-kie-signature` or `x-webhook-hmac`). (2) Add `KIE_AI_HMAC_KEY` to Vercel env vars (copy value from kie.ai Settings → Webhook HMAC Key). (3) Verify the header in the webhook handler alongside the existing query-param check. (4) Consider removing the query-param secret entirely once header auth is confirmed working.
+**Effort:** XS (human: ~1 hr / CC: ~10 min)
+**Priority:** P2
+**Depends on:** kie.ai documenting which header carries the HMAC key (check their API docs or inspect a live callback)
+
+---
+
 ### kie.ai 4xx Error Discrimination
 **What:** In `/api/jobs/restore` and `/api/jobs/restore-hires`, distinguish permanent kie.ai errors (4xx: wrong API key, malformed request) from transient errors (5xx: kie.ai downtime). On permanent 4xx, return 200 so QStash stops retrying and immediately fire the failure path.
 **Why:** A misconfigured API key currently wastes 3 kie.ai requests (maxRetries) before the job dies. Post-launch, a bad deploy could drain API quota or delay failure detection by minutes.
