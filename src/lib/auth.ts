@@ -2,12 +2,24 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db";
+import { users, accounts, verificationTokens } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { handleSignupBonus } from "@/lib/auth-events";
 
 export const { auth, signIn, signOut, handlers } = NextAuth({
-  adapter: DrizzleAdapter(db),
+  // Pass explicit table references so DrizzleAdapter uses our custom schema
+  // ("users" table, uuid PK, etc.) instead of its own internal defaults
+  // ("user" table with composite PK). Without this, createUser() fails and
+  // NextAuth returns ?error=Configuration on every OAuth attempt.
+  adapter: DrizzleAdapter(db, {
+    usersTable: users,
+    accountsTable: accounts,
+    // sessionsTable omitted intentionally — JWT strategy stores sessions in
+    // cookies, not the database, so this table is never touched at runtime.
+    // Our sessions table has a custom uuid PK which doesn't match the
+    // adapter's DefaultPostgresSessionsTable type (expects sessionToken as PK).
+    verificationTokensTable: verificationTokens,
+  }),
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,

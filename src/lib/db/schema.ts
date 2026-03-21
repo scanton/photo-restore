@@ -56,6 +56,10 @@ export const subscriptionStatusEnum = pgEnum("subscription_status", [
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").unique().notNull(),
+  // Required by @auth/drizzle-adapter — used as a flag when email is verified
+  // via a magic-link/email provider. Always null for Google OAuth users, but
+  // the column must exist or DrizzleAdapter's createUser() call will fail.
+  emailVerified: timestamp("emailVerified", { mode: "date" }),
   name: text("name"),
   image: text("image"),
   googleId: text("google_id").unique(),
