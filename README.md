@@ -82,7 +82,7 @@ npm run dev
 
 ```bash
 # Run tests
-npm run test           # Vitest unit/integration (178 tests)
+npm run test           # Vitest unit/integration (285 tests)
 ```
 
 ---
@@ -112,6 +112,6 @@ Available skills: `/browse`, `/plan-ceo-review`, `/plan-eng-review`, `/design-co
 
 ## Status
 
-**v0.3.4.0 — Auth-first flow, account profile page, and signup bonus live.**
+**v0.3.5.0 — WCAG 2.1 AA accessibility complete.**
 
-Sprint 5 complete: Google sign-in required before upload (2 free credits on first sign-in via idempotent signup bonus), shared Nav with credit balance pill, auth-conditional home page with before/after demo film strip, account profile page with 5-state restoration history, and middleware protection for `/restore/*` and `/account/*`. 251 tests passing. P1 next: fix credit purchase unauthorized error, fix blurry watermark preview.
+Sprint 7 complete: mobile drawer focus trap (WCAG 2.1 SC 2.1.2), hamburger race condition fix, before/after slider layout normalization, `getInitials` whitespace guard, credit pill ARIA label, and full keyboard + screen reader audit across Nav, BeforeAfterSlider, and AvatarCircle. 285 tests passing. See [`CHANGELOG.md`](CHANGELOG.md) for full history.
