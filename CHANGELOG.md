@@ -2,6 +2,31 @@
 
 All notable changes to PicRenew will be documented in this file.
 
+## [0.3.5.0] - 2026-03-21
+
+### Added
+- **Avatar dropdown** in Nav — WAI-ARIA menu button pattern (`role="menu"`, `role="menuitem"`, `aria-expanded`, `aria-haspopup`); contains My Account, Studio, and Sign out items
+- **AvatarCircle component** — photo or initials fallback; hoisted outside Nav to prevent React reconciliation remounts; `onError` handler degrades gracefully to initials when avatar URL fails
+- **getInitials() utility** — two-letter initials from session name (first+last word) or email; handles single-word names (`slice(0,2)`), whitespace-only names, and null names
+- **Credit balance pill** in Nav — links to /billing; color-coded normal/low/zero states with WCAG AA contrast ratios; displayed for authenticated users
+- **Mobile nav drawer** — slide-down drawer with user avatar header, all nav links, credit balance, and sign out; includes `role="dialog"` `aria-modal="true"` with WCAG-compliant focus trap
+- **ColorizeRow** — new marketing-page row component with server-side `existsSync` guard
+- **WCAG ADA compliance note** added to CLAUDE.md — permanently locks in accessibility practice
+
+### Changed
+- **All color tokens** across 5 core pages (`/`, `/billing`, `/restore/[id]`, `/studio`, `/account`) migrated to warm archival palette: `#9B5424` (cognac amber, 5.3:1) for primary actions, `#FAF7F2` (archival cream) for backgrounds, `#6B5D52` (5.8:1) for secondary text
+- **Button primary variant** (`src/components/ui/button.tsx`) updated to `#9B5424` background with `#FAF7F2` text — consistent warm cognac across all CTAs
+- **BeforeAfterSlider** — adds `afterLabel` prop (defaults to "Restored"); `h-auto` container with `min-h-[200px]` (prevents zero-height collapse on broken URLs) and `max-h-[80vh]` (prevents mobile DoS on tall images); both images now use `object-contain` for symmetric comparison when aspect ratios differ
+- **Nav hover states** — desktop sign-in button lightens to brand cognac `#B5622A` on hover; NavLink color transitions smoothly
+- **Home page** — auth conditional removed from static marketing section; ColorizeRow added to feature grid
+
+### Fixed
+- **Mobile menu race condition** — hamburger `mousedown` close now skips when the tap target is the hamburger button itself, preventing the close-then-reopen flicker
+- **Focus trap** on mobile drawer — Tab key confined within `mobileMenuRef` when drawer is open; initial focus moves to first focusable element (WCAG 2.1 SC 2.1.2 compliance)
+- **Avatar dropdown Escape key** — pressing Escape closes dropdown and returns focus to the trigger button (WAI-ARIA menu pattern)
+- **Mobile drawer Escape key** — pressing Escape closes the mobile nav drawer
+- **getInitials whitespace guard** — `name?.trim()` prevents whitespace-only strings from bypassing the email fallback and returning blank initials
+
 ## [0.3.4.0] - 2026-03-21
 
 ### Added

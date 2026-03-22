@@ -76,30 +76,6 @@
 
 ## P2 — Next Sprint Candidates
 
-### ADA / Accessibility Audit & Hardening
-**What:** Audit the full application for WCAG 2.1 AA compliance and fix all violations. Cover: keyboard navigation (tab order, focus rings, skip links), ARIA labels on interactive elements (sliders, buttons, credit pill), color contrast ratios (especially cognac amber `#B5622A` on cream `#FAF7F2`), image alt text, screen-reader-friendly form labels, and `aria-live` regions for dynamic content (upload progress, restoration status).
-**Why:** ADA compliance is both a legal requirement and a quality signal. Users with disabilities are real customers. Several interactive elements (the before/after slider, the upload drop zone, the resolution picker) are visually custom and almost certainly missing correct ARIA roles and keyboard support.
-**Pros:** Legal protection; broader audience; quality signal to B2B API customers; accessibility testing often catches usability bugs too.
-**Cons:** Some custom components (especially `BeforeAfterSlider`) may require significant ARIA work; color contrast issues may require minor design system adjustments.
-**Context:** Flagged for Sprint 7 (2026-03-21). Start with an automated axe-core pass (`npx @axe-core/cli http://localhost:3000`) to triage violations by count and severity, then fix manually. Key risk areas: before/after slider (`role="slider"`, `aria-valuenow` exists but keyboard arrow-key control may be incomplete), file upload zone (drag target needs `role="button"` and keyboard activation), credit pill (already has `aria-label` — verify format). DESIGN.md cognac accent on cream background should be checked against WCAG AA (4.5:1 for normal text, 3:1 for large text).
-**Effort:** S (human: ~2 days / CC: ~30 min)
-**Priority:** P2
-**Depends on:** —
-
----
-
-### Avatar Dropdown — Google Profile Photo + Sign-Out Menu
-**What:** Replace the "Sign out" button in the nav with a circular avatar showing the user's Google profile photo. Clicking the avatar opens a dropdown menu with: "My Account" (`/account`), "Studio" (`/studio`), and "Sign out". If the user has no Google photo (or it fails to load), fall back to their initials on the cognac amber background.
-**Why:** Google sign-in provides a profile image URL — not showing it wastes a trust signal. An avatar dropdown is the standard pattern for authenticated nav; it's cleaner than a bare "Sign out" button and surfaces the Studio and Account links in a more discoverable location.
-**Pros:** Cleaner authenticated nav; personalizes the product; standard UX pattern that users immediately understand; reduces nav clutter (Studio + Account + Sign out consolidated into one control).
-**Cons:** Dropdown state needs client-side JS (click-outside to close); avatar image must be proxied or handled carefully (Next.js image domains config needed for `lh3.googleusercontent.com`).
-**Context:** Flagged for Sprint 7 (2026-03-21). The user's Google avatar URL is available in the session as `session.user.image`. Next.js `<Image>` requires adding `lh3.googleusercontent.com` to `next.config.js` `images.remotePatterns`. The dropdown should use a `<details>/<summary>` or a Radix UI `DropdownMenu` for accessible keyboard navigation. On mobile, the avatar should still appear in the top-right corner of the mobile drawer header. Remove the standalone "Sign out" button from both desktop nav and mobile drawer — it lives exclusively in the dropdown.
-**Effort:** S (human: ~half day / CC: ~15 min)
-**Priority:** P2
-**Depends on:** —
-
----
-
 ## P3 — Post-Launch
 
 ### Email Marketing / CRM Integration
@@ -247,6 +223,13 @@
 ---
 
 ## Completed
+
+### WCAG 2.1 AA Compliance — Sprint 7 (v0.3.5.0 — 2026-03-21)
+**Completed:** v0.3.5.0 (2026-03-21)
+
+Full WCAG 2.1 AA audit across all 5 core pages (`/`, `/billing`, `/restore/[id]`, `/studio`, `/account`): color tokens migrated to warm archival palette (`#9B5424` at 5.3:1, `#6B5D52` at 5.8:1); button primary variant locked to cognac amber; ADA compliance practice permanently codified in CLAUDE.md. Avatar dropdown with WAI-ARIA menu button pattern (`role="menu"`, `aria-expanded`, Escape → focus-return), initials fallback, photo error recovery. Mobile nav drawer with `role="dialog"`, `aria-modal="true"`, WCAG-compliant focus trap, Escape handler, and hamburger race condition fix. BeforeAfterSlider height capped (`min-h-[200px]`, `max-h-[80vh]`), both images use `object-contain` for symmetric comparison. 285 tests passing. Covers both the "ADA / Accessibility Audit" and "Avatar Dropdown — Google Profile Photo + Sign-Out Menu" P2 items.
+
+---
 
 ### kie.ai Webhook Security + Failure Handling
 **Completed:** feat/restoration-pipeline (2026-03-20)
