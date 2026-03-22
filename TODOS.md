@@ -74,6 +74,125 @@
 
 ---
 
+## Restore Page — Transform Feature (Near-Term Backlog)
+
+### Design Spec: Restore Page Transform UI
+**What:** Full UI design for the "Transform" section on `/restore/[id]` — a collapsible accordion below the resolution picker that lets users apply AI transformation presets (Birthday Scene, Christmas Sweaters, etc.) and/or a free-form custom prompt on top of the standard restoration.
+**Why:** The restore page currently only supports two restoration options (Remove Frame, Colorize). Transformations are coming in the next 1-2 sprints and the options card layout must accommodate them without a rearchitecture.
+**Design decisions already made (from /plan-design-review 2026-03-21):**
+
+```
+ARCHITECTURE:
+  Options card layout (right column, Sprint 8):
+    1. Basic options: Remove Frame checkbox, Colorize checkbox
+    2. Resolution picker: Standard/High Res/Museum
+    3. Transform accordion (collapsed by default)
+       ├── Trigger: "✦ Transform this photo ▸" button
+       ├── Teaser: 3 portrait-ratio thumbnail teasers visible below trigger (always)
+       │   Shows "+N more →" count
+       └── Expanded panel (animates open 300ms ease-out):
+           ├── Category chips: [Seasonal] [Fun] [Artistic] [All]
+           ├── 2-wide portrait-ratio thumbnail grid (aspect-[3/4], ~72px wide)
+           │   Real photo example content (not emoji/icons)
+           │   Selected state: 2px solid #B5622A border, label color #9B5424
+           ├── "── Or add your own ──────────────" section
+           └── Textarea: bg #E8E0D4, rounded-[8px], min-h-[80px], max-h-[160px]
+               char counter: text-xs JetBrains Mono, right-aligned, 200 char limit
+               Placeholder changes when preset selected: "Further customize…"
+    4. CTA button (dynamic label):
+       "Restore this photo" — no transform selected
+       "Restore & transform" — both restore options + transform
+       "Transform this photo" — transform only, no restore checkboxes checked
+       Label changes animate via crossfade 150ms
+
+INTERACTION STATES:
+  Accordion: collapsed → animating-open (300ms ease-out) → expanded → animating-close
+  Arrow: ▸ rotates 90° to ▾ in sync with animation
+  Trigger shows selected preset name when collapsed: "✦ Transform: Birthday Scene ▸"
+  Thumbnails: loading (shimmer skeleton) → idle → hover (scale 1.02) → selected (amber border)
+  Category chips: filter thumbnails, non-matching fade to 40% opacity
+  Preset + custom prompt: BOTH allowed simultaneously (they stack/compound)
+
+CREDIT COST: Transformations included in base resolution cost for v1 (no extra charge).
+
+THUMBNAIL ANTI-SLOP SPEC:
+  Shape: portrait rectangle aspect-[3/4], NOT circles or squares
+  Content: real photo transformation examples (before/after composite)
+  Size: ~72px wide × ~96px tall
+  Corner: rounded-[6px]
+  Label: text-[10px] font-semibold uppercase tracking-[0.1em] color #6B5D52, below thumbnail
+
+A11Y:
+  Accordion: role="button" aria-expanded aria-controls
+  Thumbnail grid: role="radiogroup", each thumb role="radio" aria-checked
+  Arrow key navigation within grid
+  Custom prompt: aria-label, aria-describedby char counter (aria-live="polite")
+  Touch targets: min 44px (category chips need min-h-[44px])
+
+ANIMATION (see CLAUDE.md Animation section):
+  Panel open: 300ms cubic-bezier(0.16, 1, 0.3, 1)
+  Panel close: 300ms cubic-bezier(0.4, 0, 0.6, 1)
+  Color transitions: 150ms ease-out
+  Teaser thumbnails fade/scale as panel expands into full grid
+  prefers-reduced-motion: all animations disabled
+```
+
+**API note:** `presetId` field already exists in `StatusResponse`. `handleStart` will need to accept `{ removeFrame, colorize, presetId?, customPrompt? }` — send both when set.
+**Pros:** Puts transformation feature on solid design footing before any code is written.
+**Cons:** Thumbnail assets needed (real photo examples per preset).
+**Context:** Designed in /plan-design-review session 2026-03-21. Implementation on separate sprint from Sprint 8.
+**Effort:** M (human: ~3 days / CC: ~45 min)
+**Priority:** P2
+**Depends on:** ~~Sprint 8 (source image + resolution picker) must ship first~~ ✓ Shipped in v0.3.6.0
+
+---
+
+### Preset Data Model — Hardcoded vs Database
+**What:** Decide where transformation preset definitions live: a static `PRESETS` array in the codebase vs a database table vs a headless CMS. This determines whether adding new presets (holiday drops, seasonal themes) requires a code deploy.
+**Why:** If presets are hardcoded, every new preset needs an engineer + deploy. With enough presets, this becomes a bottleneck. With a DB table or CMS, marketing can add presets without engineering.
+**Pros (DB/CMS):** Marketing-speed preset updates; seasonal drops without deploys; A/B testable.
+**Cons (DB/CMS):** Added complexity; DB schema change; admin UI or CMS setup.
+**Context:** For v1, hardcode is fine. Before the transformation sprint, decide the target architecture so the initial implementation can be built to migrate easily. Consider: a `presets` DB table with `{ id, name, category, promptTemplate, thumbnailUrl, isActive, order }`.
+**Effort:** S to decide, M to implement DB model (human: ~1 day / CC: ~20 min)
+**Priority:** P2
+**Depends on:** Transformation sprint planning
+
+---
+
+### Rolling Messages — Transformation-Aware Set
+**What:** Add a second set of rolling messages (`TRANSFORMATION_MESSAGES`) shown during AI processing when `presetId` or `customPrompt` is set. Current messages are restoration-specific and will be tonally wrong for transformation jobs.
+**Why:** "Matching era-accurate tones…" during a "Birthday Scene" transformation is confusing and kills the playful vibe.
+**Sample transformation messages:**
+  - "Setting the scene…", "Dressing everyone up…", "Adding festive cheer…",
+  - "Applying the finishing touches…", "Creating the moment…", "Adding seasonal magic…",
+  - "Weaving in the details…", "Transforming with care…"
+**Pros:** Coherent, delightful processing experience for transformation jobs.
+**Cons:** Minor additional copy; needs branching logic in the rolling message timer.
+**Context:** Current `ROLLING_MESSAGES` array in `/restore/[id]/page.tsx`. Branch on `data?.presetId || data?.customPrompt` to select message set.
+**Effort:** XS (human: ~30 min / CC: ~5 min)
+**Priority:** P2
+**Depends on:** Transformation sprint (presetId surfaced in StatusResponse)
+
+---
+
+### Animation Tokens in DESIGN.md
+**What:** Add an `## Animation` section to `DESIGN.md` defining standard durations and easing curves. Animation is now a non-negotiable product principle (see CLAUDE.md).
+**Why:** Without defined tokens, engineers will use inconsistent durations (200ms here, 400ms there) and generic easing. The animated panels, smooth scroll, and transition system will feel incoherent.
+**Tokens to add:**
+  - `--duration-fast: 150ms` — color/opacity transitions, button hover, state changes
+  - `--duration-panel: 300ms` — accordion open/close, panel transitions, page elements appearing
+  - `--ease-out-spring: cubic-bezier(0.16, 1, 0.3, 1)` — open/expand (spring-like settle)
+  - `--ease-in-panel: cubic-bezier(0.4, 0, 0.6, 1)` — close/collapse (ease-in)
+  - `--ease-standard: ease-out` — general transitions
+**Pros:** Consistent motion feel across the entire product; one-line reference for engineers.
+**Cons:** None.
+**Context:** Animation principle established in /plan-design-review (2026-03-21). CLAUDE.md updated with animation rules. DESIGN.md should be the single source of truth for tokens.
+**Effort:** XS (human: ~15 min / CC: ~5 min)
+**Priority:** P1
+**Depends on:** —
+
+---
+
 ## P2 — Next Sprint Candidates
 
 ## P3 — Post-Launch
@@ -223,6 +342,13 @@
 ---
 
 ## Completed
+
+### Sprint 8 — Restore Page + Home Page Polish (v0.3.6.0 — 2026-03-21)
+**Completed:** v0.3.6.0 (2026-03-21)
+
+Source image preview in the isReady restore flow (two-column layout with source photo left, options right). ResolutionPicker component extracted with credit-based disabled states (1K=1cr, 2K=2cr, 4K=3cr) and balance loading/error states. Favicons wired via Next.js metadata icons. Home page "Decades of damage, undone" section converted from film strip to 2×2 / 1×4 grid matching ColorizeRow layout. Step 03 copy updated to describe auth-first + 2 free credits flow. 296 tests passing.
+
+---
 
 ### WCAG 2.1 AA Compliance — Sprint 7 (v0.3.5.0 — 2026-03-21)
 **Completed:** v0.3.5.0 (2026-03-21)
