@@ -293,7 +293,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                     {
                       step: "03",
                       title: "Download full resolution",
-                      body: "Preview the result — then unlock the full-resolution download for 1 credit. Yours to keep and print forever.",
+                      body: "Sign in to restore — new accounts get 2 free credits. Choose your output resolution and download full-size files to print, frame, or keep forever.",
                       icon: (
                         <svg
                           width="28"
