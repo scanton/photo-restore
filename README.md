@@ -96,7 +96,7 @@ This repo uses [gstack](https://github.com/codestack-ai/gstack) for AI-assisted 
 cd .claude/skills/gstack && ./setup
 ```
 
-Available skills: `/browse`, `/plan-ceo-review`, `/plan-eng-review`, `/design-consultation`, `/review`, `/ship`, `/qa`, `/qa-only`, `/design-review`, `/office-hours`, `/retro`, `/debug`, `/document-release`
+Available skills: `/browse`, `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/design-consultation`, `/review`, `/ship`, `/qa`, `/qa-only`, `/design-review`, `/office-hours`, `/retro`, `/investigate`, `/document-release`, `/codex`, `/careful`, `/freeze`, `/guard`, `/unfreeze`, `/setup-browser-cookies`
 
 ---
 

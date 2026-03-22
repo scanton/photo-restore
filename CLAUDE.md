@@ -16,8 +16,13 @@ Available gstack skills:
 - `/design-review` — review designs
 - `/setup-browser-cookies` — configure browser cookies for authenticated browsing
 - `/retro` — run a retrospective
-- `/debug` — debug an issue
+- `/investigate` — debug and investigate an issue
 - `/document-release` — document a release
+- `/codex` — OpenAI Codex review and adversarial challenge
+- `/careful` — safety guardrails for destructive commands
+- `/freeze` — restrict edits to a specific directory
+- `/guard` — full safety mode (careful + freeze combined)
+- `/unfreeze` — clear the freeze boundary
 
 If gstack skills aren't working, run the following to build the binary and register skills:
 
