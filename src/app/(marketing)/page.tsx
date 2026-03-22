@@ -142,82 +142,56 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </div>
             </section>
 
-            {/* Film strip — horizontal scroll demo */}
+            {/* Before/after grid — 2×2 mobile, 1×4 desktop (matches ColorizeRow layout) */}
             <section
-              className="border-t border-b py-12 overflow-hidden"
+              className="border-t border-b py-16"
               style={{ borderColor: "#EDE5D8", backgroundColor: "#F2EDE5" }}
               aria-label="Before and after photo restoration examples"
             >
-              {/* Film grain overlay */}
-              <div
-                aria-hidden="true"
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E")`,
-                  mixBlendMode: "multiply",
-                }}
-              />
-
-              <div className="mx-auto max-w-[1140px] px-6 mb-8 relative">
-                {/* #9B5424 on #F2EDE5 = 5.5:1 — WCAG AA */}
-                <p
-                  className="text-xs font-semibold uppercase tracking-widest mb-1"
-                  style={{ color: "#9B5424", letterSpacing: "0.12em" }}
-                >
-                  Before &amp; After
-                </p>
-                <h2
-                  className="text-2xl font-light"
-                  style={{
-                    fontFamily: "var(--font-fraunces), Georgia, serif",
-                    color: "#1C1410",
-                  }}
-                >
-                  Decades of damage, undone.
-                </h2>
-              </div>
-
-              {/* Scrollable film strip */}
-              <div
-                className="flex gap-6 px-6 overflow-x-auto pb-2 snap-x snap-mandatory"
-                style={{
-                  scrollbarWidth: "thin",
-                  scrollbarColor: "#C9BAA8 transparent",
-                  paddingLeft: "max(1.5rem, calc((100vw - 1140px) / 2 + 1.5rem))",
-                }}
-              >
-                {DEMO_PAIRS.map((pair, i) => (
-                  <div
-                    key={pair.era}
-                    className="flex-none snap-start flex flex-col"
-                    style={{ width: "clamp(240px, 28vw, 320px)" }}
+              <div className="mx-auto max-w-[1140px] px-6">
+                <div className="text-center mb-10">
+                  {/* #9B5424 on #F2EDE5 = 5.5:1 — WCAG AA */}
+                  <p
+                    className="text-xs font-semibold uppercase tracking-widest mb-2"
+                    style={{ color: "#9B5424", letterSpacing: "0.12em" }}
                   >
-                    <BeforeAfterSlider
-                      beforeSrc={pair.before}
-                      afterSrc={pair.after}
-                      beforeAlt={pair.beforeAlt}
-                      afterAlt={pair.afterAlt}
-                      className="aspect-[2/3] w-full"
-                    />
-                    {/* #6B5D52 on #F2EDE5 = 5.18:1 — WCAG AA */}
-                    <p
-                      className="mt-2 text-xs text-center"
-                      style={{
-                        fontFamily: "var(--font-mono), monospace",
-                        color: "#6B5D52",
-                        letterSpacing: "0.08em",
-                      }}
-                    >
-                      {pair.era}
-                    </p>
-                  </div>
-                ))}
-                {/* Fade-out hint on the right — indicates scroll continuation */}
-                <div
-                  aria-hidden="true"
-                  className="flex-none w-16 shrink-0"
-                  style={{ minWidth: 16 }}
-                />
+                    Before &amp; After
+                  </p>
+                  <h2
+                    className="text-2xl font-light"
+                    style={{
+                      fontFamily: "var(--font-fraunces), Georgia, serif",
+                      color: "#1C1410",
+                    }}
+                  >
+                    Decades of damage, undone.
+                  </h2>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {DEMO_PAIRS.map((pair) => (
+                    <div key={pair.era} className="flex flex-col">
+                      <BeforeAfterSlider
+                        beforeSrc={pair.before}
+                        afterSrc={pair.after}
+                        beforeAlt={pair.beforeAlt}
+                        afterAlt={pair.afterAlt}
+                        className="aspect-[2/3] w-full"
+                      />
+                      {/* #6B5D52 on #F2EDE5 = 5.18:1 — WCAG AA */}
+                      <p
+                        className="mt-2 text-xs text-center"
+                        style={{
+                          fontFamily: "var(--font-mono), monospace",
+                          color: "#6B5D52",
+                          letterSpacing: "0.08em",
+                        }}
+                      >
+                        {pair.era}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </section>
 
@@ -293,7 +267,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                     {
                       step: "03",
                       title: "Download full resolution",
-                      body: "Preview the result — then unlock the full-resolution download for 1 credit. Yours to keep and print forever.",
+                      body: "Sign in to restore — new accounts get 2 free credits. Choose your output resolution and download full-size files to print, frame, or keep forever.",
                       icon: (
                         <svg
                           width="28"

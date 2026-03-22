@@ -2,6 +2,20 @@
 
 All notable changes to PicRenew will be documented in this file.
 
+## [0.3.6.0] - 2026-03-21
+
+### Added
+- **Source image preview** on the restore page — when you upload a photo, you can now see it in the left column of the restore screen while choosing options, so you always know which photo you're working with
+- **ResolutionPicker component** — extracted as a shared component with three resolution tiers (Standard 1K / High Res 2K / Museum 4K), each showing its credit cost; options are automatically disabled when you don't have enough credits, so you can only choose what you can afford
+- **Credit balance enforcement** in resolution picker — resolution options that exceed your current balance are visually dimmed and non-interactive (unavailable at 0 credits: all paid tiers; at 1 credit: 2K and 4K; etc.)
+- **Balance error state** — if the credit balance fails to load, a clear amber warning banner appears instead of silently failing
+- **Favicons** wired up via Next.js metadata — browser tabs, bookmarks, iOS home screen, and Android PWA icons all use the PicRenew favicon set
+
+### Changed
+- **Restore page layout** (isReady state) — replaced the narrow single-column options card with a two-column grid: source photo on the left, options on the right; gives the restore screen a more intentional, studio-like feel
+- **"Decades of damage, undone" section** on the home page — replaced the old film strip layout with a consistent 2×2 / 1×4 grid matching the "From faded to full color" section above it; both sections now use the same before/after slider grid format
+- **Step 03 copy** on the home page — updated from "unlock the full-resolution download for 1 credit" to accurately describe the current auth-first + 2 free credits flow: "Sign in to restore — new accounts get 2 free credits"
+
 ## [0.3.5.0] - 2026-03-21
 
 ### Added

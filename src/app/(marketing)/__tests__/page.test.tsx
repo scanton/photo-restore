@@ -79,11 +79,22 @@ describe("HomePage", () => {
       expect(screen.queryByTestId("upload-section")).toBeNull();
     });
 
-    it("renders before-after sliders in the film strip", async () => {
+    it("renders before-after sliders — hero + all grid pairs", async () => {
       await renderPage();
       const sliders = screen.getAllByTestId("before-after-slider");
-      // At least 2 sliders (hero + film strip pairs)
-      expect(sliders.length).toBeGreaterThanOrEqual(2);
+      // 1 hero + 4 grid items = 5 sliders total
+      expect(sliders.length).toBe(5);
+    });
+
+    it("renders 'Decades of damage, undone' heading in the grid section", async () => {
+      await renderPage();
+      expect(screen.getByText(/decades of damage, undone/i)).toBeInTheDocument();
+    });
+
+    it("Step 03 copy mentions free credits — not '1 credit'", async () => {
+      await renderPage();
+      expect(screen.getByText(/new accounts get 2 free credits/i)).toBeInTheDocument();
+      expect(screen.queryByText(/unlock the full-resolution download for 1 credit/i)).toBeNull();
     });
 
     it("does NOT show the auth modal when authPrompt is absent", async () => {
