@@ -92,6 +92,7 @@ export function Nav({ session, creditBalance }: NavProps) {
   const avatarRef = useRef<HTMLDivElement>(null);
   const avatarButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   const isLow = creditBalance !== null && creditBalance !== undefined && creditBalance <= 1;
   const isZero = creditBalance !== null && creditBalance !== undefined && creditBalance === 0;
@@ -126,11 +127,16 @@ export function Nav({ session, creditBalance }: NavProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Close mobile menu on click-outside
+  // Close mobile menu on click-outside.
+  // Skip close when the tap lands on the hamburger button itself — the button's onClick
+  // will toggle the menu; closing here then toggling back causes a "stuck open" race.
   useEffect(() => {
     if (!menuOpen) return;
     const handler = (e: MouseEvent) => {
-      if (!mobileMenuRef.current?.contains(e.target as Node)) {
+      if (
+        !mobileMenuRef.current?.contains(e.target as Node) &&
+        !menuButtonRef.current?.contains(e.target as Node)
+      ) {
         setMenuOpen(false);
       }
     };
@@ -159,6 +165,31 @@ export function Nav({ session, creditBalance }: NavProps) {
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
+  }, [menuOpen]);
+
+  // Focus trap for mobile drawer — WCAG 2.1 SC 2.1.2 (No Keyboard Trap, in a good way:
+  // aria-modal="true" requires focus to stay inside the dialog).
+  useEffect(() => {
+    if (!menuOpen) return;
+    const el = mobileMenuRef.current;
+    if (!el) return;
+    const focusable = el.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    // Move initial focus into the drawer so keyboard users don't stay on the hamburger
+    first?.focus();
+    const trap = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      }
+    };
+    document.addEventListener("keydown", trap);
+    return () => document.removeEventListener("keydown", trap);
   }, [menuOpen]);
 
   const showAvatar = !!session?.user?.image && !imgError;
@@ -282,6 +313,7 @@ export function Nav({ session, creditBalance }: NavProps) {
 
         {/* Mobile hamburger */}
         <button
+          ref={menuButtonRef}
           className="md:hidden flex flex-col justify-center items-center w-11 h-11 gap-1.5 rounded-[8px] transition-colors duration-150"
           style={{ color: "#4A3F35" }}
           aria-label={menuOpen ? "Close menu" : "Open menu"}
