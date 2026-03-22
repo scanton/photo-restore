@@ -82,7 +82,7 @@ npm run dev
 
 ```bash
 # Run tests
-npm run test           # Vitest unit/integration (285 tests)
+npm run test           # Vitest unit/integration (296 tests)
 ```
 
 ---
@@ -112,6 +112,6 @@ Available skills: `/browse`, `/plan-ceo-review`, `/plan-eng-review`, `/design-co
 
 ## Status
 
-**v0.3.5.0 — WCAG 2.1 AA accessibility complete.**
+**v0.3.6.0 — Restore page preview + resolution picker.**
 
-Sprint 7 complete: mobile drawer focus trap (WCAG 2.1 SC 2.1.2), hamburger race condition fix, before/after slider layout normalization, `getInitials` whitespace guard, credit pill ARIA label, and full keyboard + screen reader audit across Nav, BeforeAfterSlider, and AvatarCircle. 285 tests passing. See [`CHANGELOG.md`](CHANGELOG.md) for full history.
+Sprint 8 complete: source image preview on the restore page (two-column layout — photo left, options right), ResolutionPicker component with credit-based disabled states (Standard 1cr / High Res 2cr / Museum 3cr), balance error state, favicons wired up, home page "Decades of damage, undone" section redesigned to match "From faded to full color" grid, and Step 03 copy updated to reflect auth-first + 2 free credits flow. 296 tests passing. See [`CHANGELOG.md`](CHANGELOG.md) for full history.
