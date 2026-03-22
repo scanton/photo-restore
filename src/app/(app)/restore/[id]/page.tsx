@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import { BeforeAfterSlider } from "@/components/before-after-slider";
 import { Button } from "@/components/ui/button";
+import {
+  ResolutionPicker,
+  RESOLUTION_OPTIONS,
+  type Resolution,
+} from "@/components/restore/ResolutionPicker";
 
 type RestorationStatus =
   | "ready"
@@ -13,8 +19,6 @@ type RestorationStatus =
   | "processing"
   | "complete"
   | "failed";
-
-type Resolution = "1k" | "2k" | "4k";
 
 interface StatusResponse {
   id: string;
@@ -29,18 +33,6 @@ interface StatusResponse {
   resolution: Resolution;
   presetId: string;
 }
-
-// Credit cost per resolution (base × multiplier for standard preset)
-const RESOLUTION_OPTIONS: {
-  value: Resolution;
-  label: string;
-  credits: number;
-  description: string;
-}[] = [
-  { value: "1k", label: "Standard", credits: 1, description: "1K · great for sharing" },
-  { value: "2k", label: "High Res", credits: 2, description: "2K · ideal for printing" },
-  { value: "4k", label: "Museum",   credits: 3, description: "4K · archival quality" },
-];
 
 const STATUS_LABELS: Record<RestorationStatus, string> = {
   ready: "Ready to restore",
@@ -88,6 +80,7 @@ export default function RestorePage() {
   const [guestPurchasing, setGuestPurchasing] = useState(false);
   const [resolution, setResolution] = useState<Resolution>("1k");
   const [balance, setBalance] = useState<number | null>(null);
+  const [balanceError, setBalanceError] = useState(false);
 
   // Sprint 4: restoration options
   const [removeFrame, setRemoveFrame] = useState(false);
@@ -124,9 +117,17 @@ export default function RestorePage() {
   // Fetch credit balance for "Use Credits" affordance
   useEffect(() => {
     void fetch("/api/credits/balance")
-      .then((r) => r.json())
-      .then((d: { balance?: number }) => setBalance(d.balance ?? 0))
-      .catch(() => setBalance(0));
+      .then((r) => {
+        if (!r.ok) throw new Error("balance fetch failed");
+        return r.json();
+      })
+      .then((d: { balance?: number }) => {
+        setBalance(d.balance ?? 0);
+        setBalanceError(false);
+      })
+      .catch(() => {
+        setBalanceError(true);
+      });
   }, []);
 
   // Initial fetch on mount — if already mid-flow, enable polling immediately
@@ -384,13 +385,49 @@ export default function RestorePage() {
           )}
         </div>
 
-        {/* ── Ready: options screen ─────────────────────────────── */}
+        {/* ── Ready: two-column — source image + options ────────── */}
         {isReady && (
-          <div className="max-w-md">
+          <div className="grid lg:grid-cols-2 gap-12 items-start">
+            {/* Left: source photo so user knows what they're working with */}
+            <div>
+              {data?.inputBlobUrl ? (
+                <div
+                  className="relative w-full rounded-[12px] overflow-hidden"
+                  style={{ aspectRatio: "2/3", maxWidth: 480 }}
+                >
+                  <Image
+                    src={data.inputBlobUrl}
+                    alt="Your uploaded photo"
+                    fill
+                    sizes="(max-width: 1024px) 100vw, 570px"
+                    className="object-contain"
+                  />
+                </div>
+              ) : (
+                /* Shimmer skeleton while inputBlobUrl loads */
+                <div
+                  className="w-full rounded-[12px] animate-pulse"
+                  style={{ aspectRatio: "2/3", maxWidth: 480, backgroundColor: "#E8E0D4" }}
+                />
+              )}
+            </div>
+
+            {/* Right: options card */}
             <div
               className="rounded-[16px] p-8 border"
               style={{ backgroundColor: "#F2EDE5", borderColor: "#D9CDB8" }}
             >
+              {/* Balance fetch error warning */}
+              {balanceError && (
+                <div
+                  className="mb-4 px-3 py-2 rounded-[8px] text-xs"
+                  style={{ backgroundColor: "#FEF3E2", color: "#9B5424" }}
+                  role="alert"
+                >
+                  Could not load credit balance. Check your connection or reload.
+                </div>
+              )}
+
               <h2
                 className="text-xl font-light mb-2"
                 style={{
@@ -405,12 +442,10 @@ export default function RestorePage() {
                 applied at processing time and cannot be changed afterwards.
               </p>
 
-              {/* Options */}
-              <div className="flex flex-col gap-4 mb-8">
+              {/* Restoration toggles */}
+              <div className="flex flex-col gap-4 mb-6">
                 {/* Remove Frame */}
-                <label
-                  className="flex items-start gap-3 cursor-pointer"
-                >
+                <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={removeFrame}
@@ -432,9 +467,7 @@ export default function RestorePage() {
                 </label>
 
                 {/* Colorize */}
-                <label
-                  className="flex items-start gap-3 cursor-pointer"
-                >
+                <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={colorize}
@@ -454,6 +487,21 @@ export default function RestorePage() {
                     </span>
                   </div>
                 </label>
+              </div>
+
+              {/* Resolution picker */}
+              <div className="mb-8">
+                <p
+                  className="text-xs font-semibold uppercase tracking-widest mb-3"
+                  style={{ color: "#6B5D52", letterSpacing: "0.08em" }}
+                >
+                  Output resolution
+                </p>
+                <ResolutionPicker
+                  resolution={resolution}
+                  setResolution={setResolution}
+                  balance={balance}
+                />
               </div>
 
               <Button
@@ -599,47 +647,11 @@ export default function RestorePage() {
                       >
                         Output resolution
                       </p>
-                      <div className="flex flex-col gap-2">
-                        {RESOLUTION_OPTIONS.map((opt) => {
-                          const isSelected = resolution === opt.value;
-                          return (
-                            <button
-                              key={opt.value}
-                              onClick={() => setResolution(opt.value)}
-                              className="flex items-center justify-between px-4 py-3 rounded-[8px] border text-left transition-colors"
-                              style={{
-                                backgroundColor: isSelected ? "#E8C5A8" : "#E8E0D4",
-                                borderColor: isSelected ? "#B5622A" : "transparent",
-                              }}
-                            >
-                              <div>
-                                <span
-                                  className="text-sm font-semibold block"
-                                  style={{ color: "#1C1410" }}
-                                >
-                                  {opt.label}
-                                </span>
-                                <span
-                                  className="text-xs"
-                                  style={{ color: "#6B5D52" }}
-                                >
-                                  {opt.description}
-                                </span>
-                              </div>
-                              <span
-                                className="text-sm font-medium shrink-0 ml-3"
-                                style={{
-                                  fontFamily: "var(--font-mono), monospace",
-                                  color: "#9B5424",
-                                  fontVariantNumeric: "tabular-nums",
-                                }}
-                              >
-                                {opt.credits} cr
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                      <ResolutionPicker
+                        resolution={resolution}
+                        setResolution={setResolution}
+                        balance={balance}
+                      />
                     </div>
 
                     {/* Balance indicator */}
