@@ -38,6 +38,25 @@ Key rules at a glance:
 - **Spacing:** 8px base, comfortable density — never rushed or cramped
 - In QA mode, flag any code or UI that doesn't match DESIGN.md.
 
+## Animation & Motion (Non-Negotiable)
+PicRenew is a playful, lively product. Animated transitions are a core part of the experience — not optional polish.
+
+**Always animate:**
+- **Accordion/panel open-close** — use CSS `transition` or Framer Motion `AnimatePresence`. Never toggle visibility with an instant show/hide. Duration: 250–350ms, ease-out.
+- **Page scroll from nav links** — never `jump`. Use smooth scroll behavior. When a user clicks "How it works" or any in-page anchor, the page should animate to that section. Use CSS `scroll-behavior: smooth` on `html`, or JS-based smooth scroll for more control.
+- **Page transitions** — between route changes, use a fade or slide-up transition.
+- **Interactive elements appearing** — new cards, panels, or content sliding into view should animate in (fade + slight translateY), not pop.
+- **State changes** — selected/deselected states on presets, pickers, and toggles should transition (background color, border) over 150–200ms.
+
+**Easing defaults:**
+- Expand/open: `cubic-bezier(0.16, 1, 0.3, 1)` (spring-like, fast settle)
+- Collapse/close: `cubic-bezier(0.4, 0, 0.6, 1)` (ease-in)
+- Color/opacity transitions: `ease-out` 150ms
+
+**In QA mode:** Flag any panel that appears/disappears instantly (no animation) as a medium severity issue.
+
+**Accessibility note:** Always respect `prefers-reduced-motion`. Wrap animations in `@media (prefers-reduced-motion: no-preference)` or use Framer Motion's `useReducedMotion()` hook.
+
 ## Accessibility (Non-Negotiable)
 WCAG 2.1 AA compliance is required on every sprint — not deferred, not optional.
 
