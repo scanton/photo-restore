@@ -82,12 +82,12 @@ function EmptyState() {
       <Link
         href="/"
         className="px-6 py-3 rounded-[8px] text-sm font-semibold transition-colors duration-150"
-        style={{ backgroundColor: "#B5622A", color: "#FAF7F2" }}
+        style={{ backgroundColor: "#9B5424", color: "#FAF7F2" }}
         onMouseEnter={(e) =>
-          ((e.currentTarget as HTMLElement).style.backgroundColor = "#D4874E")
+          ((e.currentTarget as HTMLElement).style.backgroundColor = "#B5622A")
         }
         onMouseLeave={(e) =>
-          ((e.currentTarget as HTMLElement).style.backgroundColor = "#B5622A")
+          ((e.currentTarget as HTMLElement).style.backgroundColor = "#9B5424")
         }
       >
         Restore a photo

@@ -365,7 +365,7 @@ export default function RestorePage() {
           {data?.eraEstimate && (
             <p
               className="text-sm mt-1"
-              style={{ fontFamily: "var(--font-mono), monospace", color: "#8A7A6E" }}
+              style={{ fontFamily: "var(--font-mono), monospace", color: "#6B5D52" }}
             >
               Era estimate: {data.eraEstimate}
               {data.eraConfidence != null &&
@@ -377,7 +377,7 @@ export default function RestorePage() {
           {isProcessing && (
             <p
               className="text-sm mt-1 transition-opacity duration-500"
-              style={{ color: "#A89380" }}
+              style={{ color: "#6B5D52" }}
             >
               {ROLLING_MESSAGES[rollingMsgIdx]}
             </p>
@@ -425,7 +425,7 @@ export default function RestorePage() {
                     >
                       Remove frame or border
                     </span>
-                    <span className="text-xs" style={{ color: "#8A7A6E" }}>
+                    <span className="text-xs" style={{ color: "#6B5D52" }}>
                       Crops out physical frames, decorative borders, or white edges
                     </span>
                   </div>
@@ -449,7 +449,7 @@ export default function RestorePage() {
                     >
                       Colorize
                     </span>
-                    <span className="text-xs" style={{ color: "#8A7A6E" }}>
+                    <span className="text-xs" style={{ color: "#6B5D52" }}>
                       Adds natural, period-accurate color to black &amp; white photos
                     </span>
                   </div>
@@ -502,7 +502,7 @@ export default function RestorePage() {
             >
               Handling your photo with care.
             </p>
-            <p className="mt-2 text-sm" style={{ color: "#8A7A6E" }}>
+            <p className="mt-2 text-sm" style={{ color: "#6B5D52" }}>
               This usually takes 20–60 seconds.
             </p>
           </div>
@@ -517,7 +517,7 @@ export default function RestorePage() {
                 <BeforeAfterSlider
                   beforeSrc={data.inputBlobUrl}
                   afterSrc={data.watermarkedBlobUrl}
-                  className={`w-full aspect-[4/3] ${status === "pending_payment" ? "filter blur-[2px]" : ""}`}
+                  className={`w-full ${status === "pending_payment" ? "filter blur-[2px]" : ""}`}
                 />
               ) : (
                 <div
@@ -527,7 +527,7 @@ export default function RestorePage() {
               )}
 
               {status === "pending_payment" && (
-                <p className="mt-2 text-xs text-center" style={{ color: "#8A7A6E" }}>
+                <p className="mt-2 text-xs text-center" style={{ color: "#6B5D52" }}>
                   Preview — purchase to unlock full resolution
                 </p>
               )}
@@ -570,7 +570,7 @@ export default function RestorePage() {
                       >
                         Quick download — no account needed
                       </p>
-                      <p className="text-xs mb-3" style={{ color: "#8A7A6E" }}>
+                      <p className="text-xs mb-3" style={{ color: "#6B5D52" }}>
                         Standard resolution (1K) · Download once · $0.99
                       </p>
                       <Button
@@ -587,7 +587,7 @@ export default function RestorePage() {
                     {/* Divider */}
                     <div className="flex items-center gap-3 mb-5">
                       <div className="flex-1 h-px" style={{ backgroundColor: "#D9CDB8" }} />
-                      <span className="text-xs" style={{ color: "#A89380" }}>or use credits</span>
+                      <span className="text-xs" style={{ color: "#6B5D52" }}>or use credits</span>
                       <div className="flex-1 h-px" style={{ backgroundColor: "#D9CDB8" }} />
                     </div>
 
@@ -595,7 +595,7 @@ export default function RestorePage() {
                     <div className="mb-5">
                       <p
                         className="text-xs font-semibold uppercase tracking-widest mb-3"
-                        style={{ color: "#A89380", letterSpacing: "0.08em" }}
+                        style={{ color: "#6B5D52", letterSpacing: "0.08em" }}
                       >
                         Output resolution
                       </p>
@@ -630,7 +630,7 @@ export default function RestorePage() {
                                 className="text-sm font-medium shrink-0 ml-3"
                                 style={{
                                   fontFamily: "var(--font-mono), monospace",
-                                  color: "#B5622A",
+                                  color: "#9B5424",
                                   fontVariantNumeric: "tabular-nums",
                                 }}
                               >

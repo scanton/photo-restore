@@ -125,7 +125,7 @@ export function RestorationHistoryRow({
             {resolution.toUpperCase()}
           </span>
         </div>
-        <p className="text-xs" style={{ color: "#A89380" }}>
+        <p className="text-xs" style={{ color: "#6B5D52" }}>
           {formattedDate}
         </p>
       </div>
@@ -137,12 +137,12 @@ export function RestorationHistoryRow({
             href={outputBlobUrl}
             download
             className="text-sm font-semibold px-4 py-1.5 rounded-[8px] transition-colors duration-150"
-            style={{ backgroundColor: "#B5622A", color: "#FAF7F2" }}
+            style={{ backgroundColor: "#9B5424", color: "#FAF7F2" }}
             onMouseEnter={(e) =>
-              ((e.currentTarget as HTMLElement).style.backgroundColor = "#D4874E")
+              ((e.currentTarget as HTMLElement).style.backgroundColor = "#B5622A")
             }
             onMouseLeave={(e) =>
-              ((e.currentTarget as HTMLElement).style.backgroundColor = "#B5622A")
+              ((e.currentTarget as HTMLElement).style.backgroundColor = "#9B5424")
             }
           >
             Download
@@ -151,7 +151,7 @@ export function RestorationHistoryRow({
           <div className="flex items-center gap-2">
             <span
               className="text-xs font-semibold px-2 py-1 rounded-[4px]"
-              style={{ backgroundColor: "#FDF3E7", color: "#C17A2A" }}
+              style={{ backgroundColor: "#FDF3E7", color: "#8B5A1E" }}
             >
               Expired
             </span>
@@ -185,7 +185,7 @@ export function RestorationHistoryRow({
           <Link
             href={`/restore/${id}`}
             className="flex items-center gap-1.5 text-sm font-medium"
-            style={{ color: "#B5622A" }}
+            style={{ color: "#9B5424" }}
           >
             <svg
               className="animate-spin shrink-0"

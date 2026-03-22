@@ -97,22 +97,30 @@ export function BeforeAfterSlider({
       }}
       tabIndex={0}
     >
-      {/* After image (full width, beneath) */}
+      {/* After image (full width, beneath).
+       * h-auto lets the container size to the image's natural dimensions.
+       * min-h-[200px] prevents zero-height collapse on broken/expired URLs.
+       * max-h-[80vh] caps height on tall images to prevent mobile DoS/jank.
+       * When a parent passes an aspect-[X/Y] class, overflow-hidden clips as before.
+       */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={afterSrc}
         alt={afterAlt}
         draggable={false}
-        className="block w-full h-full object-cover"
+        className="block w-full h-auto min-h-[200px] max-h-[80vh] object-contain"
       />
 
-      {/* Before image (clipped to left side via clip-path — no DOM measurement needed) */}
+      {/* Before image (clipped to left side via clip-path — no DOM measurement needed).
+       * object-contain matches the after image so both halves display consistently
+       * when input/output aspect ratios differ (e.g. border-removal restorations).
+       */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={beforeSrc}
         alt={beforeAlt}
         draggable={false}
-        className="absolute inset-0 block w-full h-full object-cover"
+        className="absolute inset-0 block w-full h-full object-contain"
         style={{
           clipPath: `inset(0 ${100 - position}% 0 0)`,
           transition: isDragging ? "none" : "clip-path 600ms cubic-bezier(0.16, 1, 0.3, 1)",
@@ -171,7 +179,8 @@ export function BeforeAfterSlider({
         </span>
       </div>
       <div className="absolute bottom-3 right-3 pointer-events-none">
-        <span className="px-2 py-1 rounded-[4px] text-xs font-semibold uppercase tracking-wider bg-[#B5622A] text-[#FAF7F2]">
+        {/* #FAF7F2 on #9B5424 = 5.3:1 — WCAG AA */}
+        <span className="px-2 py-1 rounded-[4px] text-xs font-semibold uppercase tracking-wider bg-[#9B5424] text-[#FAF7F2]">
           {afterLabel}
         </span>
       </div>

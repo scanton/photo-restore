@@ -24,9 +24,9 @@ const SUB_ICONS: Record<string, string> = {
 };
 
 const PACK_DESCRIPTIONS: Record<string, string> = {
-  "price_1TCsI0E49NyEBPDXLXXYQmue": "Best for trying it out",
-  "price_1TCsJcE49NyEBPDX82490PyM": "Most popular",
-  "price_1TCsKfE49NyEBPDXMuHGNQYu": "Best value per credit",
+  "price_1TCsI0E49NyEBPDXLXXYQmue": "10 credits — restore 10 photos at 1K, 5 at 2K, or 3 at 4K",
+  "price_1TCsJcE49NyEBPDX82490PyM": "20 credits — restore 20 photos at 1K, 10 at 2K, or 6 at 4K",
+  "price_1TCsKfE49NyEBPDXMuHGNQYu": "55 credits — restore 55 photos at 1K, 27 at 2K, or 18 at 4K",
 };
 
 interface BillingClientProps {
@@ -155,9 +155,9 @@ export default function BillingClient({ session, creditBalance: initialBalance }
             <button
               onClick={() => void signIn("google", { callbackUrl: "/billing" })}
               className="shrink-0 px-5 py-2.5 rounded-[8px] text-sm font-semibold transition-colors"
-              style={{ backgroundColor: "#B5622A", color: "#FAF7F2" }}
-              onMouseEnter={(e) => ((e.target as HTMLElement).style.backgroundColor = "#D4874E")}
-              onMouseLeave={(e) => ((e.target as HTMLElement).style.backgroundColor = "#B5622A")}
+              style={{ backgroundColor: "#9B5424", color: "#FAF7F2" }}
+              onMouseEnter={(e) => ((e.target as HTMLElement).style.backgroundColor = "#B5622A")}
+              onMouseLeave={(e) => ((e.target as HTMLElement).style.backgroundColor = "#9B5424")}
             >
               Sign in with Google
             </button>
@@ -201,7 +201,7 @@ export default function BillingClient({ session, creditBalance: initialBalance }
           <div className="flex items-center justify-between mb-5">
             <p
               className="text-xs font-semibold uppercase tracking-widest"
-              style={{ color: "#A89380", letterSpacing: "0.08em" }}
+              style={{ color: "#6B5D52", letterSpacing: "0.08em" }}
             >
               Subscriptions — credits renew monthly
             </p>
@@ -216,7 +216,8 @@ export default function BillingClient({ session, creditBalance: initialBalance }
                   onClick={() => setBillingInterval(iv)}
                   className="px-4 py-1.5 text-sm font-medium transition-colors"
                   style={{
-                    backgroundColor: billingInterval === iv ? "#B5622A" : "transparent",
+                    // #9B5424 on #FAF7F2 = 5.3:1; inactive #6B5D52 on #FAF7F2 = 5.8:1 — both WCAG AA
+                    backgroundColor: billingInterval === iv ? "#9B5424" : "transparent",
                     color: billingInterval === iv ? "#FAF7F2" : "#6B5D52",
                   }}
                 >
@@ -263,10 +264,10 @@ export default function BillingClient({ session, creditBalance: initialBalance }
                     >
                       ${monthlyEquiv}
                     </p>
-                    <span className="text-sm" style={{ color: "#8A7A6E" }}>/ mo</span>
+                    <span className="text-sm" style={{ color: "#6B5D52" }}>/ mo</span>
                   </div>
                   {isAnnual && (
-                    <p className="text-xs mb-1" style={{ color: "#8A7A6E" }}>
+                    <p className="text-xs mb-1" style={{ color: "#6B5D52" }}>
                       Billed ${sub.price.toFixed(2)}/year
                     </p>
                   )}
@@ -303,7 +304,7 @@ export default function BillingClient({ session, creditBalance: initialBalance }
         <section className="mb-12">
           <p
             className="text-xs font-semibold uppercase tracking-widest mb-5"
-            style={{ color: "#A89380", letterSpacing: "0.08em" }}
+            style={{ color: "#6B5D52", letterSpacing: "0.08em" }}
           >
             Credit Packs — one-time purchase
           </p>
@@ -332,7 +333,7 @@ export default function BillingClient({ session, creditBalance: initialBalance }
                         {pack.name}
                       </p>
                       {description && (
-                        <p className="text-xs mb-1" style={{ color: "#8A7A6E" }}>
+                        <p className="text-xs mb-1" style={{ color: "#6B5D52" }}>
                           {description}
                         </p>
                       )}
@@ -344,7 +345,7 @@ export default function BillingClient({ session, creditBalance: initialBalance }
                     }}
                   >
                     {pack.credits}
-                    <span className="text-lg ml-1" style={{ color: "#8A7A6E" }}>
+                    <span className="text-lg ml-1" style={{ color: "#6B5D52" }}>
                       credits
                     </span>
                   </p>

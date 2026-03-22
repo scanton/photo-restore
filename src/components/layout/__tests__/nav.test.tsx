@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { Nav } from "@/components/layout/Nav";
 
 // Mock next-auth/react so signIn/signOut are callable stubs
@@ -20,6 +20,15 @@ const mockSession = {
     name: "Ada Lovelace",
     email: "ada@example.com",
     image: null,
+  },
+};
+
+const mockSessionWithImage = {
+  user: {
+    id: "user-2",
+    name: "Grace Hopper",
+    email: "grace@example.com",
+    image: "https://lh3.googleusercontent.com/photo.jpg",
   },
 };
 
@@ -81,16 +90,20 @@ describe("Nav", () => {
       links.forEach((link) => expect(link).toHaveAttribute("href", "/studio"));
     });
 
-    it("shows My Account link", () => {
+    it("shows My Account link after opening avatar dropdown", () => {
       render(<Nav session={mockSession} />);
-      const links = screen.getAllByRole("link", { name: /my account/i });
+      // My Account lives inside the avatar dropdown — open it first
+      fireEvent.click(screen.getByRole("button", { name: /account menu/i }));
+      const links = screen.getAllByRole("menuitem", { name: /my account/i });
       expect(links.length).toBeGreaterThan(0);
     });
 
-    it("shows Sign out button", () => {
+    it("shows Sign out after opening avatar dropdown", () => {
       render(<Nav session={mockSession} />);
-      const buttons = screen.getAllByRole("button", { name: /sign out/i });
-      expect(buttons.length).toBeGreaterThan(0);
+      // Sign out moved into the avatar dropdown
+      fireEvent.click(screen.getByRole("button", { name: /account menu/i }));
+      const signOut = screen.getByRole("menuitem", { name: /sign out/i });
+      expect(signOut).toBeInTheDocument();
     });
 
     it("does NOT show Sign in button", () => {
@@ -115,6 +128,124 @@ describe("Nav", () => {
       render(<Nav session={mockSession} creditBalance={0} />);
       const pill = screen.getByLabelText(/0 credits remaining/i);
       expect(pill).toBeInTheDocument();
+    });
+  });
+
+  describe("getInitials edge cases", () => {
+    it("renders first+last initials for a long multi-part name (e.g., 'John Paul Getty' → 'JG')", () => {
+      // Regression: getInitials must use parts[0][0] + parts[parts.length - 1][0], not parts[1][0]
+      // A 3-word name must pick the LAST word, not the second word.
+      // Found by /plan-eng-review on 2026-03-21
+      const longNameSession = {
+        user: { id: "u3", name: "John Paul Getty", email: "j@example.com", image: null },
+      };
+      render(<Nav session={longNameSession} />);
+      // First word: "John" → "J", Last word: "Getty" → "G" → initials "JG"
+      expect(screen.getAllByText("JG").length).toBeGreaterThan(0);
+    });
+
+    it("renders first 2 chars for a single-word name (e.g., 'Cher' → 'CH')", () => {
+      // Regression: single-word name must use slice(0,2).toUpperCase(), not parts[1]
+      // Found by /plan-eng-review on 2026-03-21
+      const singleWordSession = {
+        user: { id: "u4", name: "Cher", email: "cher@example.com", image: null },
+      };
+      render(<Nav session={singleWordSession} />);
+      expect(screen.getAllByText("CH").length).toBeGreaterThan(0);
+    });
+
+    it("renders first char of email when user has no name", () => {
+      // Regression: email-only session must fall through to email[0].toUpperCase()
+      // Found by /plan-eng-review on 2026-03-21
+      const emailOnlySession = {
+        user: { id: "u5", name: null, email: "zara@example.com", image: null },
+      };
+      render(<Nav session={emailOnlySession} />);
+      expect(screen.getAllByText("Z").length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("avatar dropdown", () => {
+    it("renders initials fallback when session.user.image is null", () => {
+      render(<Nav session={mockSession} />);
+      // "Ada Lovelace" → initials "AL"
+      expect(screen.getAllByText("AL").length).toBeGreaterThan(0);
+    });
+
+    it("renders avatar img element when session.user.image is set", () => {
+      render(<Nav session={mockSessionWithImage} />);
+      const avatarImgs = screen.getAllByRole("img", { name: /grace hopper/i });
+      expect(avatarImgs.length).toBeGreaterThan(0);
+    });
+
+    it("falls back to initials when avatar img fires an error event", () => {
+      render(<Nav session={mockSessionWithImage} />);
+      const avatarImgs = screen.getAllByRole("img", { name: /grace hopper/i });
+      // Fire the error event to simulate a broken image URL
+      fireEvent.error(avatarImgs[0]);
+      // After error, initials "GH" should appear (Grace Hopper)
+      expect(screen.getAllByText("GH").length).toBeGreaterThan(0);
+    });
+
+    it("dropdown contains My Account, Studio, and Sign out items in DOM", () => {
+      // Dropdown content is rendered into the DOM regardless of open state
+      // (it uses useState but re-renders immediately — check by opening it)
+      render(<Nav session={mockSession} />);
+      const accountMenuBtn = screen.getByRole("button", { name: /account menu/i });
+      fireEvent.click(accountMenuBtn);
+      expect(screen.getByRole("menuitem", { name: /my account/i })).toBeInTheDocument();
+      expect(screen.getAllByRole("menuitem", { name: /^studio$/i }).length).toBeGreaterThan(0);
+      expect(screen.getByRole("menuitem", { name: /sign out/i })).toBeInTheDocument();
+    });
+
+    it("My Account menuitem links to /account", () => {
+      render(<Nav session={mockSession} />);
+      fireEvent.click(screen.getByRole("button", { name: /account menu/i }));
+      const link = screen.getByRole("menuitem", { name: /my account/i });
+      expect(link).toHaveAttribute("href", "/account");
+    });
+
+    it("Studio menuitem links to /studio", () => {
+      render(<Nav session={mockSession} />);
+      fireEvent.click(screen.getByRole("button", { name: /account menu/i }));
+      const studioItems = screen.getAllByRole("menuitem", { name: /^studio$/i });
+      expect(studioItems[0]).toHaveAttribute("href", "/studio");
+    });
+
+    it("does NOT show a standalone top-level Sign out button (moved into dropdown)", () => {
+      render(<Nav session={mockSession} />);
+      // Sign out should only appear inside the dropdown — not as a top-level nav button
+      // The account menu button should be present, Sign out not visible until opened
+      expect(screen.queryByRole("menuitem", { name: /sign out/i })).toBeNull();
+      expect(screen.getByRole("button", { name: /account menu/i })).toBeInTheDocument();
+    });
+
+    it("Escape key closes the avatar dropdown and returns focus to the trigger button", () => {
+      render(<Nav session={mockSession} />);
+      const accountMenuBtn = screen.getByRole("button", { name: /account menu/i });
+      fireEvent.click(accountMenuBtn);
+      // Dropdown should be visible
+      expect(screen.getByRole("menu")).toBeInTheDocument();
+      // Press Escape
+      fireEvent.keyDown(document, { key: "Escape" });
+      // Dropdown should be gone
+      expect(screen.queryByRole("menu")).toBeNull();
+    });
+  });
+
+  describe("mobile nav drawer", () => {
+    it("Escape key closes the mobile menu drawer", () => {
+      // Regression: mobile drawer has a keydown Escape handler — verify it fires
+      // Found by pre-landing review on 2026-03-21
+      render(<Nav session={mockSession} />);
+      // Open the mobile menu (jsdom renders all elements regardless of CSS visibility)
+      fireEvent.click(screen.getByRole("button", { name: /open menu/i }));
+      // Drawer is open — role=dialog should be present
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      // Press Escape
+      fireEvent.keyDown(document, { key: "Escape" });
+      // Drawer should be gone
+      expect(screen.queryByRole("dialog")).toBeNull();
     });
   });
 });

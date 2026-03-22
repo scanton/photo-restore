@@ -52,9 +52,10 @@ export function ColorizeRow() {
       <div className="mx-auto max-w-[1140px] px-6 py-16">
         {/* Section header */}
         <div className="text-center mb-10">
+          {/* #9B5424 on #FAF7F2 = 5.3:1 — WCAG AA */}
           <p
             className="text-xs font-semibold uppercase tracking-widest mb-3"
-            style={{ color: "#B5622A", letterSpacing: "0.12em" }}
+            style={{ color: "#9B5424", letterSpacing: "0.12em" }}
           >
             Before &amp; After
           </p>
@@ -90,11 +91,12 @@ export function ColorizeRow() {
                 afterLabel="Colorized"
                 className="aspect-[2/3] w-full"
               />
+              {/* #6B5D52 on #FAF7F2 = 5.8:1 — WCAG AA */}
               <p
                 className="mt-2 text-xs text-center"
                 style={{
                   fontFamily: "var(--font-mono), monospace",
-                  color: "#A89380",
+                  color: "#6B5D52",
                   letterSpacing: "0.08em",
                 }}
               >

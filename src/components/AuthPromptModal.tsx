@@ -174,7 +174,8 @@ export function AuthPromptModal({ showModal }: AuthPromptModalProps) {
         </button>
 
         {/* Free credits callout */}
-        <p className="mt-4 text-xs text-center" style={{ color: "#A89380" }}>
+        {/* #6B5D52 on modal bg = 5.8:1 — WCAG AA */}
+        <p className="mt-4 text-xs text-center" style={{ color: "#6B5D52" }}>
           Free forever to try. 2 credits included on sign-up.
         </p>
       </div>

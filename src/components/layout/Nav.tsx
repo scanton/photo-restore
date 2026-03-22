@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { signIn, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface NavSession {
   user?: {
@@ -18,6 +18,66 @@ interface NavProps {
   creditBalance?: number | null;
 }
 
+/** Compute two-letter initials from a session's name or email. */
+function getInitials(session: NavSession | null): string {
+  const name = session?.user?.name;
+  if (name?.trim()) {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  const email = session?.user?.email;
+  if (email) return email[0].toUpperCase();
+  return "?";
+}
+
+/**
+ * Avatar circle — photo or initials fallback.
+ * Hoisted outside Nav so its component identity is stable across Nav re-renders,
+ * preventing unnecessary DOM remounts (React reconciliation anti-pattern).
+ */
+function AvatarCircle({
+  showAvatar,
+  session,
+  onError,
+  size = 32,
+}: {
+  showAvatar: boolean;
+  session: NavSession | null;
+  onError: () => void;
+  size?: number;
+}) {
+  return (
+    <div
+      className="relative shrink-0 rounded-full overflow-hidden flex items-center justify-center select-none"
+      style={{
+        width: size,
+        height: size,
+        backgroundColor: "#9B5424", // #FAF7F2 on #9B5424 = 5.3:1 — WCAG AA
+        color: "#FAF7F2",
+        fontSize: size * 0.375,
+        fontWeight: 600,
+        fontFamily: "var(--font-jakarta), system-ui, sans-serif",
+        cursor: "pointer",
+      }}
+    >
+      {showAvatar ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={session!.user!.image!}
+          alt={session?.user?.name ?? "Your avatar"}
+          width={size}
+          height={size}
+          className="absolute inset-0 w-full h-full object-cover"
+          onError={onError}
+        />
+      ) : (
+        <span aria-hidden="true">{getInitials(session)}</span>
+      )}
+    </div>
+  );
+}
+
 /**
  * Shared marketing nav — used on landing page, billing page, and anywhere
  * else that needs the top nav outside the app shell.
@@ -27,6 +87,12 @@ interface NavProps {
  */
 export function Nav({ session, creditBalance }: NavProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
+  const avatarRef = useRef<HTMLDivElement>(null);
+  const avatarButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   const isLow = creditBalance !== null && creditBalance !== undefined && creditBalance <= 1;
   const isZero = creditBalance !== null && creditBalance !== undefined && creditBalance === 0;
@@ -37,16 +103,96 @@ export function Nav({ session, creditBalance }: NavProps) {
     : isLow
     ? "#FDF3E7"
     : "#E8C5A8";
+  // Text colors chosen for ≥4.5:1 contrast against each pill background (WCAG AA).
+  // normal: #6B3B14 on #E8C5A8 = 5.0:1; low: #8B5A1E on #FDF3E7 = 5.3:1; zero: #B83B3B on #FCEAEA = 4.6:1
   const pillText = isZero
     ? "#B83B3B"
     : isLow
-    ? "#C17A2A"
-    : "#8A4520";
+    ? "#8B5A1E"
+    : "#6B3B14";
   const pillBorder = isZero
     ? "#B83B3B"
     : isLow
     ? "#C17A2A"
     : "transparent";
+
+  // Close avatar dropdown on click-outside (mousedown fires before blur)
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (!avatarRef.current?.contains(e.target as Node)) {
+        setAvatarOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Close mobile menu on click-outside.
+  // Skip close when the tap lands on the hamburger button itself — the button's onClick
+  // will toggle the menu; closing here then toggling back causes a "stuck open" race.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        !mobileMenuRef.current?.contains(e.target as Node) &&
+        !menuButtonRef.current?.contains(e.target as Node)
+      ) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
+
+  // Close avatar dropdown on Escape — returns focus to the trigger button (ARIA menu pattern)
+  useEffect(() => {
+    if (!avatarOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setAvatarOpen(false);
+        avatarButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [avatarOpen]);
+
+  // Close mobile menu on Escape
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [menuOpen]);
+
+  // Focus trap for mobile drawer — WCAG 2.1 SC 2.1.2 (No Keyboard Trap, in a good way:
+  // aria-modal="true" requires focus to stay inside the dialog).
+  useEffect(() => {
+    if (!menuOpen) return;
+    const el = mobileMenuRef.current;
+    if (!el) return;
+    const focusable = el.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    // Move initial focus into the drawer so keyboard users don't stay on the hamburger
+    first?.focus();
+    const trap = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      }
+    };
+    document.addEventListener("keydown", trap);
+    return () => document.removeEventListener("keydown", trap);
+  }, [menuOpen]);
+
+  const showAvatar = !!session?.user?.image && !imgError;
 
   return (
     <header
@@ -71,7 +217,6 @@ export function Nav({ session, creditBalance }: NavProps) {
           {session?.user ? (
             <>
               <NavLink href="/studio">Studio</NavLink>
-              <NavLink href="/account">My Account</NavLink>
 
               {/* Credit balance pill */}
               {creditBalance !== null && creditBalance !== undefined && (
@@ -91,23 +236,75 @@ export function Nav({ session, creditBalance }: NavProps) {
                 </Link>
               )}
 
-              <button
-                onClick={() => signOut({ callbackUrl: "/" })}
-                className="text-sm font-medium transition-colors duration-150"
-                style={{ color: "#8A7A6E" }}
-                onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "#4A3F35")}
-                onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "#8A7A6E")}
-              >
-                Sign out
-              </button>
+              {/* Avatar dropdown */}
+              <div ref={avatarRef} className="relative">
+                <button
+                  ref={avatarButtonRef}
+                  aria-label="Account menu"
+                  aria-expanded={avatarOpen}
+                  aria-haspopup="true"
+                  onClick={() => setAvatarOpen((o) => !o)}
+                  className="flex items-center rounded-full transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                  style={{ outlineColor: "#B5622A" }}
+                >
+                  <AvatarCircle showAvatar={showAvatar} session={session} onError={() => setImgError(true)} size={34} />
+                </button>
+
+                {avatarOpen && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 mt-2 w-44 rounded-[10px] border shadow-md py-1 z-50"
+                    style={{
+                      backgroundColor: "#FAF7F2",
+                      borderColor: "#D9CDB8",
+                      boxShadow: "0 4px 20px rgba(28,20,16,0.12)",
+                    }}
+                  >
+                    <Link
+                      href="/account"
+                      role="menuitem"
+                      className="block px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:bg-[#F2EDE5]"
+                      style={{ color: "#1C1410" }}
+                      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "#F2EDE5")}
+                      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "transparent")}
+                      onClick={() => setAvatarOpen(false)}
+                    >
+                      My Account
+                    </Link>
+                    <Link
+                      href="/studio"
+                      role="menuitem"
+                      className="block px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:bg-[#F2EDE5]"
+                      style={{ color: "#1C1410" }}
+                      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "#F2EDE5")}
+                      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "transparent")}
+                      onClick={() => setAvatarOpen(false)}
+                    >
+                      Studio
+                    </Link>
+                    <div className="my-1 border-t" style={{ borderColor: "#EDE5D8" }} />
+                    <button
+                      role="menuitem"
+                      onClick={() => { setAvatarOpen(false); signOut({ callbackUrl: "/" }); }}
+                      className="block w-full text-left px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:bg-[#F2EDE5]"
+                      style={{ color: "#6B5D52" }}
+                      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "#F2EDE5")}
+                      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "transparent")}
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                )}
+              </div>
             </>
           ) : (
+            /* #9B5424 on #FAF7F2 = 5.3:1 — WCAG AA; hover lightens to brand cognac */
             <button
               onClick={() => signIn("google", { callbackUrl: "/" })}
               className="px-4 py-2 rounded-[8px] text-sm font-semibold transition-colors duration-200"
-              style={{ backgroundColor: "#B5622A", color: "#FAF7F2" }}
-              onMouseEnter={(e) => ((e.target as HTMLElement).style.backgroundColor = "#D4874E")}
-              onMouseLeave={(e) => ((e.target as HTMLElement).style.backgroundColor = "#B5622A")}
+              style={{ backgroundColor: "#9B5424", color: "#FAF7F2" }}
+              onMouseEnter={(e) => ((e.target as HTMLElement).style.backgroundColor = "#B5622A")}
+              onMouseLeave={(e) => ((e.target as HTMLElement).style.backgroundColor = "#9B5424")}
             >
               Sign in
             </button>
@@ -116,6 +313,7 @@ export function Nav({ session, creditBalance }: NavProps) {
 
         {/* Mobile hamburger */}
         <button
+          ref={menuButtonRef}
           className="md:hidden flex flex-col justify-center items-center w-11 h-11 gap-1.5 rounded-[8px] transition-colors duration-150"
           style={{ color: "#4A3F35" }}
           aria-label={menuOpen ? "Close menu" : "Open menu"}
@@ -149,9 +347,32 @@ export function Nav({ session, creditBalance }: NavProps) {
       {/* Mobile menu drawer */}
       {menuOpen && (
         <div
+          ref={mobileMenuRef}
           className="md:hidden border-t px-6 py-4 flex flex-col gap-4"
           style={{ borderColor: "#EDE5D8", backgroundColor: "#FAF7F2" }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation menu"
         >
+          {/* Mobile drawer header — avatar or sign-in */}
+          {session?.user && (
+            <div className="flex items-center gap-3 pb-3 border-b" style={{ borderColor: "#EDE5D8" }}>
+              <AvatarCircle showAvatar={showAvatar} session={session} onError={() => setImgError(true)} size={36} />
+              <div className="flex flex-col min-w-0">
+                {session.user.name && (
+                  <span className="text-sm font-semibold truncate" style={{ color: "#1C1410" }}>
+                    {session.user.name}
+                  </span>
+                )}
+                {session.user.email && (
+                  <span className="text-xs truncate" style={{ color: "#6B5D52" }}>
+                    {session.user.email}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           <MobileNavLink href="/billing" onClick={() => setMenuOpen(false)}>Pricing</MobileNavLink>
           <MobileNavLink href="/#how-it-works" onClick={() => setMenuOpen(false)}>How it works</MobileNavLink>
 
@@ -177,7 +398,7 @@ export function Nav({ session, creditBalance }: NavProps) {
               <button
                 onClick={() => { setMenuOpen(false); signOut({ callbackUrl: "/" }); }}
                 className="text-sm font-medium text-left"
-                style={{ color: "#8A7A6E" }}
+                style={{ color: "#6B5D52" }}
               >
                 Sign out
               </button>
@@ -186,7 +407,7 @@ export function Nav({ session, creditBalance }: NavProps) {
             <button
               onClick={() => { setMenuOpen(false); signIn("google", { callbackUrl: "/" }); }}
               className="w-full px-4 py-3 rounded-[8px] text-sm font-semibold text-center"
-              style={{ backgroundColor: "#B5622A", color: "#FAF7F2" }}
+              style={{ backgroundColor: "#9B5424", color: "#FAF7F2" }}
             >
               Sign in
             </button>

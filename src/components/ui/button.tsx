@@ -34,7 +34,8 @@ type ButtonProps = ButtonAsLinkProps | ButtonAsButtonProps;
 
 const variantClasses: Record<Variant, string> = {
   primary:
-    "bg-[#B5622A] text-[#FAF7F2] hover:bg-[#D4874E] active:bg-[#8A4520] border-transparent",
+    // #9B5424 on #FAF7F2 = 5.3:1 — WCAG AA. Hover lightens to brand cognac #B5622A.
+    "bg-[#9B5424] text-[#FAF7F2] hover:bg-[#B5622A] active:bg-[#8A4520] border-transparent",
   secondary:
     "bg-[#F2EDE5] text-[#1C1410] hover:bg-[#E8E0D4] active:bg-[#DDD3C3] border-[#D4C9BB]",
   ghost:
